@@ -1,0 +1,6 @@
+# Treat generated Python cache files as binary and discourage merges
+*.pyc binary
+__pycache__/** binary
+
+# Normalize text files
+* text=auto
