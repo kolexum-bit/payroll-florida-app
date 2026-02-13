@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Payroll Florida{% endblock %}</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2rem; }
+    nav a { margin-right: 1rem; text-decoration: none; color: #004085; }
+    .message.success { background: #d4edda; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
+    .message.error { background: #f8d7da; color: #721c24; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
+    form div { margin-bottom: 0.5rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+    .actions { display: flex; gap: 0.5rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="/company">Company</a>
+    <a href="#">Employees</a>
+    <a href="#">Monthly Payroll</a>
+    <a href="#">Pay Stubs</a>
+    <a href="#">Reports</a>
+  </nav>
+  <hr />
+  {% block content %}{% endblock %}
+</body>
+</html>
