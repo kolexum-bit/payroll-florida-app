@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Reports</h2>
+<p>Use query params from address bar:</p>
+<ul>
+  <li><a href="/reports/941?year=2026&quarter=1">Form 941 Summary</a></li>
+  <li><a href="/reports/rt6?year=2026&quarter=1">Florida RT-6 Summary</a> (<a href="/reports/rt6.csv?year=2026&quarter=1">CSV detail</a>)</li>
+  <li><a href="/reports/940?year=2026">Form 940 Summary</a></li>
+</ul>
+{% endblock %}

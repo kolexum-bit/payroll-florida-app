@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Form 940 Summary - {{ year }}</h2>
+<ul>{% for k, v in summary.items() %}<li><strong>{{ k }}</strong>: {{ '%.2f'|format(v) }}</li>{% endfor %}</ul>
+{% endblock %}

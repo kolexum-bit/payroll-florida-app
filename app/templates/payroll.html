@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Run Monthly Payroll</h2>
+<form method="post" action="/monthly-payroll/run">
+  <label>Employee
+    <select name="employee_id">
+      {% for e in employees %}<option value="{{ e.id }}">{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Tax Year <input type="number" name="tax_year" value="{{ company.default_tax_year if company else 2026 }}"></label>
+  <label>Pay Month (1-12) <input type="number" min="1" max="12" name="pay_month" required></label>
+  <label>Pay Date <input type="date" name="pay_date" required></label>
+  <label>Gross Wages <input type="number" step="0.01" name="gross_wages" required></label>
+  <button type="submit">Run Monthly Payroll</button>
+</form>
+{% endblock %}

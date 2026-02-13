@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Florida RT-6 Summary - {{ year }} Q{{ quarter }}</h2>
+<ul>
+  <li>Gross Wages: {{ '%.2f'|format(summary.gross_wages) }}</li>
+  <li>Excess Wages: {{ '%.2f'|format(summary.excess_wages) }}</li>
+  <li>Taxable Wages: {{ '%.2f'|format(summary.taxable_wages) }}</li>
+  <li>Tax Due: {{ '%.2f'|format(summary.tax_due) }}</li>
+</ul>
+{% endblock %}

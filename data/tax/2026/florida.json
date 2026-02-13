@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "year": 2026,
+    "source": "Florida RT-6 guidance",
+    "table_version": "2026.1"
+  },
+  "rt6": {
+    "wage_base": 7000,
+    "default_employer_rate": 0.027
+  }
+}

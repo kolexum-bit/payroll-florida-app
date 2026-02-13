@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Create Employee</h2>
+<form method="post" action="/employees">
+  <label>First Name <input name="first_name" required></label>
+  <label>Last Name <input name="last_name" required></label>
+  <label>SSN Last 4 <input name="ssn_last4" required></label>
+  <label>Filing Status
+    <select name="filing_status"><option value="single">Single</option><option value="married">Married</option></select>
+  </label>
+  <label><input type="checkbox" name="step2_checkbox"> W-4 Step 2 Checkbox</label>
+  <label>Dependents (child) <input type="number" name="dependents_child_count" value="0"></label>
+  <label>Dependents (other) <input type="number" name="dependents_other_count" value="0"></label>
+  <label>Other Income (annual) <input type="number" step="0.01" name="other_income_annual" value="0"></label>
+  <label>Deductions (annual) <input type="number" step="0.01" name="deductions_annual" value="0"></label>
+  <label>Extra Withholding (monthly) <input type="number" step="0.01" name="extra_withholding" value="0"></label>
+  <label>Pre-tax Deduction (monthly) <input type="number" step="0.01" name="pre_tax_deduction_monthly" value="0"></label>
+  <label>Post-tax Deduction (monthly) <input type="number" step="0.01" name="post_tax_deduction_monthly" value="0"></label>
+  <button type="submit">Create Employee</button>
+</form>
+
+<h3>Employees</h3>
+<ul>
+{% for e in employees %}
+  <li>#{{ e.id }} {{ e.first_name }} {{ e.last_name }} ({{ e.filing_status }})</li>
+{% endfor %}
+</ul>
+{% endblock %}

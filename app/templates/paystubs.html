@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Pay Stubs</h2>
+<ul>
+{% for r in rows %}
+  <li>Emp #{{ r.employee_id }} - {{ r.tax_year }}/{{ r.pay_month }} - Net ${{ '%.2f'|format(r.net_pay) }} - <a href="/pay-stubs/{{ r.id }}.pdf">PDF</a></li>
+{% endfor %}
+</ul>
+{% endblock %}

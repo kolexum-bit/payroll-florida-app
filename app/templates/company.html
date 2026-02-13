@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Create/Update Company</h2>
+<form method="post" action="/company">
+  <label>Name <input name="name" value="{{ company.name if company else '' }}" required></label>
+  <label>FEIN <input name="fein" value="{{ company.fein if company else '' }}" required></label>
+  <label>Florida Account # <input name="fl_account_number" value="{{ company.fl_account_number if company else '' }}" required></label>
+  <label>Default Tax Year <input type="number" name="default_tax_year" value="{{ company.default_tax_year if company else 2026 }}" required></label>
+  <label>FL SUTA Rate <input type="number" step="0.0001" name="fl_suta_rate" value="{{ company.fl_suta_rate if company else 0.027 }}" required></label>
+  <button type="submit">Create Company</button>
+</form>
+{% endblock %}

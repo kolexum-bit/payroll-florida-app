@@ -1,0 +1,80 @@
+{
+  "metadata": {
+    "year": 2026,
+    "source": "IRS Pub 15-T (percentage method approximation structure)",
+    "table_version": "2026.1"
+  },
+  "fit": {
+    "method": "annualized_percentage",
+    "pay_periods_per_year": 12,
+    "dependent_credit_per_child": 2000,
+    "dependent_credit_other": 500,
+    "filing_status": {
+      "single": {
+        "step2_unchecked": {
+          "standard_deduction": 14600,
+          "brackets": [
+            {"up_to": 11600, "rate": 0.10, "base_tax": 0, "over": 0},
+            {"up_to": 47150, "rate": 0.12, "base_tax": 1160, "over": 11600},
+            {"up_to": 100525, "rate": 0.22, "base_tax": 5426, "over": 47150},
+            {"up_to": 191950, "rate": 0.24, "base_tax": 17168.5, "over": 100525},
+            {"up_to": 243725, "rate": 0.32, "base_tax": 39110.5, "over": 191950},
+            {"up_to": 609350, "rate": 0.35, "base_tax": 55678.5, "over": 243725},
+            {"up_to": null, "rate": 0.37, "base_tax": 183647.25, "over": 609350}
+          ]
+        },
+        "step2_checked": {
+          "standard_deduction": 0,
+          "brackets": [
+            {"up_to": 11600, "rate": 0.10, "base_tax": 0, "over": 0},
+            {"up_to": 47150, "rate": 0.12, "base_tax": 1160, "over": 11600},
+            {"up_to": 100525, "rate": 0.22, "base_tax": 5426, "over": 47150},
+            {"up_to": 191950, "rate": 0.24, "base_tax": 17168.5, "over": 100525},
+            {"up_to": 243725, "rate": 0.32, "base_tax": 39110.5, "over": 191950},
+            {"up_to": 609350, "rate": 0.35, "base_tax": 55678.5, "over": 243725},
+            {"up_to": null, "rate": 0.37, "base_tax": 183647.25, "over": 609350}
+          ]
+        }
+      },
+      "married": {
+        "step2_unchecked": {
+          "standard_deduction": 29200,
+          "brackets": [
+            {"up_to": 23200, "rate": 0.10, "base_tax": 0, "over": 0},
+            {"up_to": 94300, "rate": 0.12, "base_tax": 2320, "over": 23200},
+            {"up_to": 201050, "rate": 0.22, "base_tax": 10852, "over": 94300},
+            {"up_to": 383900, "rate": 0.24, "base_tax": 34337, "over": 201050},
+            {"up_to": 487450, "rate": 0.32, "base_tax": 78221, "over": 383900},
+            {"up_to": 731200, "rate": 0.35, "base_tax": 111357, "over": 487450},
+            {"up_to": null, "rate": 0.37, "base_tax": 196669.5, "over": 731200}
+          ]
+        },
+        "step2_checked": {
+          "standard_deduction": 0,
+          "brackets": [
+            {"up_to": 23200, "rate": 0.10, "base_tax": 0, "over": 0},
+            {"up_to": 94300, "rate": 0.12, "base_tax": 2320, "over": 23200},
+            {"up_to": 201050, "rate": 0.22, "base_tax": 10852, "over": 94300},
+            {"up_to": 383900, "rate": 0.24, "base_tax": 34337, "over": 201050},
+            {"up_to": 487450, "rate": 0.32, "base_tax": 78221, "over": 383900},
+            {"up_to": 731200, "rate": 0.35, "base_tax": 111357, "over": 487450},
+            {"up_to": null, "rate": 0.37, "base_tax": 196669.5, "over": 731200}
+          ]
+        }
+      }
+    }
+  },
+  "fica": {
+    "social_security_rate_employee": 0.062,
+    "social_security_rate_employer": 0.062,
+    "social_security_wage_base": 176100,
+    "medicare_rate_employee": 0.0145,
+    "medicare_rate_employer": 0.0145,
+    "additional_medicare_rate_employee": 0.009,
+    "additional_medicare_threshold": 200000
+  },
+  "futa": {
+    "rate": 0.006,
+    "wage_base": 7000
+  }
+}
