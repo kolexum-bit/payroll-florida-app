@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}Pay Stubs{% endblock %}
+{% block content %}
+<h1>Pay Stubs</h1>
+<table>
+<thead><tr><th>ID</th><th>Employee</th><th>Period</th><th>Net</th><th>PDF</th></tr></thead>
+<tbody>
+{% for entry in entries %}
+<tr>
+  <td>{{ entry.id }}</td>
+  <td>{{ entry.employee.first_name }} {{ entry.employee.last_name }}</td>
+  <td>{{ entry.period }}</td>
+  <td>{{ entry.net_pay }}</td>
+  <td><a href="/paystubs/{{ entry.id }}.pdf">Download PDF</a></td>
+</tr>
+{% else %}<tr><td colspan="5">No pay stubs yet.</td></tr>{% endfor %}
+</tbody>
+</table>
+{% endblock %}

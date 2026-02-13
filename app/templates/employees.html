@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Employees{% endblock %}
+{% block content %}
+<h1>Employees</h1>
+{% if message %}<div class="message {{ status }}">{{ message }}</div>{% endif %}
+
+<h2>{{ "Update Employee" if edit_employee else "Create Employee" }}</h2>
+<form method="post" action="/employees">
+  {% if edit_employee %}<input type="hidden" name="employee_id" value="{{ edit_employee.id }}" />{% endif %}
+  <div><label>Company</label><br />
+    <select name="company_id" required>
+      {% for company in companies %}
+      <option value="{{ company.id }}" {% if edit_employee and edit_employee.company_id == company.id %}selected{% endif %}>{{ company.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div><label>First Name</label><br /><input type="text" name="first_name" required value="{{ edit_employee.first_name if edit_employee else '' }}" /></div>
+  <div><label>Last Name</label><br /><input type="text" name="last_name" required value="{{ edit_employee.last_name if edit_employee else '' }}" /></div>
+  <div><label>Email</label><br /><input type="email" name="email" required value="{{ edit_employee.email if edit_employee else '' }}" /></div>
+  <div><label>Monthly Salary</label><br /><input type="number" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
+  <button type="submit">{{ "Update Employee" if edit_employee else "Create Employee" }}</button>
+</form>
+
+<h2>Saved Employees</h2>
+<table>
+<thead><tr><th>ID</th><th>Name</th><th>Company</th><th>Email</th><th>Monthly Salary</th><th>Actions</th></tr></thead>
+<tbody>
+{% for employee in employees %}
+<tr>
+  <td>{{ employee.id }}</td>
+  <td>{{ employee.first_name }} {{ employee.last_name }}</td>
+  <td>{{ employee.company.name }}</td>
+  <td>{{ employee.email }}</td>
+  <td>{{ employee.monthly_salary }}</td>
+  <td class="actions">
+    <a href="/employees?edit_id={{ employee.id }}">Edit</a>
+    <form method="post" action="/employees/{{ employee.id }}/delete"><button type="submit">Delete</button></form>
+  </td>
+</tr>
+{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
+</tbody>
+</table>
+{% endblock %}

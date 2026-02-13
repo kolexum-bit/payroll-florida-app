@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models import Base
@@ -9,13 +9,25 @@ from app.models import Base
 def create_session_factory(database_url: str):
     connect_args = {"check_same_thread": False} if database_url.startswith("sqlite") else {}
     engine = create_engine(database_url, connect_args=connect_args)
+
+    if database_url.startswith("sqlite"):
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, _connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
     Base.metadata.create_all(bind=engine)
-    return sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    return sessionmaker(autocommit=False, autoflush=False, expire_on_commit=False, bind=engine)
 
 
 def get_db(session_factory: sessionmaker) -> Generator[Session, None, None]:
     db = session_factory()
     try:
         yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

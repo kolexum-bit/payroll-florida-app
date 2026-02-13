@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1>Reports</h1>
+<ul>
+  <li>Total payroll entries: {{ summary.count }}</li>
+  <li>Total gross payroll: {{ summary.gross }}</li>
+  <li>Total net payroll: {{ summary.net }}</li>
+  <li>Total federal withholding: {{ summary.federal }}</li>
+</ul>
+
+<h2>Recent payroll</h2>
+<table>
+<thead><tr><th>ID</th><th>Employee</th><th>Period</th><th>Gross</th><th>Net</th></tr></thead>
+<tbody>
+{% for entry in recent %}
+<tr><td>{{ entry.id }}</td><td>{{ entry.employee.first_name }} {{ entry.employee.last_name }}</td><td>{{ entry.period }}</td><td>{{ entry.gross_pay }}</td><td>{{ entry.net_pay }}</td></tr>
+{% else %}<tr><td colspan="5">No payroll data.</td></tr>{% endfor %}
+</tbody>
+</table>
+{% endblock %}
