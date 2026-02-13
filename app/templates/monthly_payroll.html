@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Monthly Payroll | Payroll Florida{% endblock %}
+{% block content %}
+<h1>Monthly Payroll</h1>
+<form method="post" action="/monthly-payroll">
+  <input type="hidden" name="record_id" value="{{ edit_record.id if edit_record else '' }}" />
+  <div><label>Employee</label><br /><select name="employee_id" required>{% for e in employees %}<option value="{{ e.id }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}</select></div>
+  <div><label>Year</label><br /><input type="number" name="year" required value="{{ edit_record.year if edit_record else '' }}" /></div>
+  <div><label>Month</label><br /><input type="number" min="1" max="12" name="month" required value="{{ edit_record.month if edit_record else '' }}" /></div>
+  <div><label>Pay Date</label><br /><input type="date" name="pay_date" required value="{{ edit_record.pay_date if edit_record else '' }}" /></div>
+  <div><label>Hours Worked</label><br /><input type="number" step="0.01" name="hours_worked" required value="{{ edit_record.hours_worked if edit_record else '173.33' }}" /></div>
+  <button type="submit">{{ 'Update Payroll' if edit_record else 'Create Payroll' }}</button>
+</form>
+<h2>Saved Monthly Payroll Records</h2>
+<table><thead><tr><th>ID</th><th>Employee</th><th>Year/Month</th><th>Pay Date</th><th>Gross</th><th>Net</th><th>Actions</th></tr></thead><tbody>
+{% for r in records %}<tr><td>{{ r.id }}</td><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.pay_date }}</td><td>{{ r.gross_pay }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?edit_id={{ r.id }}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="7">No payroll records yet.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}

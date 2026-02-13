@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Form 940 Report | Payroll Florida{% endblock %}
+{% block content %}
+<h1>Reports - Form 940</h1>
+<form method="get" action="/reports">
+  <input type="hidden" name="report_type" value="940" />
+  <div><label>Year</label><br /><input type="number" name="year" value="{{ year }}" /></div>
+  <button type="submit">Load</button>
+</form>
+<p>Taxable FUTA Wages: {{ report_data.wages }}</p>
+<p>FUTA Tax: {{ report_data.futa_tax }}</p>
+<p><a href="/reports/export/940?year={{ year }}&format=csv">Export CSV</a> | <a href="/reports/export/940?year={{ year }}&format=pdf">Export PDF</a></p>
+<p><a href="/reports?report_type=rt6&year={{ year }}&quarter=1">Go to RT-6</a> | <a href="/reports?report_type=941&year={{ year }}&quarter=1">Go to 941</a></p>
+{% endblock %}

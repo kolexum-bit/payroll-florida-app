@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Pay Stubs | Payroll Florida{% endblock %}
+{% block content %}
+<h1>Pay Stubs</h1>
+<form method="post" action="/pay-stubs/generate">
+  <div><label>Employee</label><br /><select name="employee_id" required>{% for e in employees %}<option value="{{ e.id }}">{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}</select></div>
+  <div><label>Year</label><br /><input type="number" name="year" required /></div>
+  <div><label>Month</label><br /><input type="number" min="1" max="12" name="month" required /></div>
+  <button type="submit">Download PDF Pay Stub</button>
+</form>
+<h2>Available Payroll Records</h2>
+<table><thead><tr><th>Employee</th><th>Year/Month</th><th>Gross</th><th>Net</th></tr></thead><tbody>
+{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.net_pay }}</td></tr>{% else %}<tr><td colspan="4">No payroll records available.</td></tr>{% endfor %}
+</tbody></table>
+{% endblock %}
