@@ -1,81 +1,20 @@
 {% extends "base.html" %}
-
-{% block title %}Company{% endblock %}
-
+{% block title %}Company | Payroll Florida{% endblock %}
 {% block content %}
-  <h1>Company</h1>
-
-  {% if message %}
-    <div class="message {{ status }}">{{ message }}</div>
-  {% endif %}
-
-  <h2>{{ "Update Company" if edit_company else "Create Company" }}</h2>
-  <form method="post" action="/company">
-    {% if edit_company %}
-      <input type="hidden" name="company_id" value="{{ edit_company.id }}" />
-    {% endif %}
-
-    <div>
-      <label>Name</label><br />
-      <input type="text" name="name" required value="{{ edit_company.name if edit_company else '' }}" />
-    </div>
-    <div>
-      <label>FEIN</label><br />
-      <input type="text" name="fein" required value="{{ edit_company.fein if edit_company else '' }}" />
-    </div>
-    <div>
-      <label>Florida Account Number</label><br />
-      <input type="text" name="florida_account_number" required value="{{ edit_company.florida_account_number if edit_company else '' }}" />
-    </div>
-    <div>
-      <label>Default Tax Year</label><br />
-      <input type="number" name="default_tax_year" required value="{{ edit_company.default_tax_year if edit_company else '' }}" />
-    </div>
-    <div>
-      <label>FL SUTA Rate</label><br />
-      <input type="number" step="0.0001" name="fl_suta_rate" required value="{{ edit_company.fl_suta_rate if edit_company else '' }}" />
-    </div>
-
-    <button type="submit">{{ "Update Company" if edit_company else "Create Company" }}</button>
-    {% if edit_company %}
-      <a href="/company">Cancel</a>
-    {% endif %}
-  </form>
-
-  <h2>Saved Companies</h2>
-  <table>
-    <thead>
-      <tr>
-        <th>ID</th>
-        <th>Name</th>
-        <th>FEIN</th>
-        <th>Florida Account</th>
-        <th>Tax Year</th>
-        <th>SUTA Rate</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for company in companies %}
-        <tr>
-          <td>{{ company.id }}</td>
-          <td>{{ company.name }}</td>
-          <td>{{ company.fein }}</td>
-          <td>{{ company.florida_account_number }}</td>
-          <td>{{ company.default_tax_year }}</td>
-          <td>{{ company.fl_suta_rate }}</td>
-          <td class="actions">
-            <a href="/company?edit_id={{ company.id }}">Edit</a>
-            <form method="post" action="/company/{{ company.id }}/delete" style="display:inline;">
-              <button type="submit">Delete</button>
-            </form>
-          </td>
-        </tr>
-      {% else %}
-        <tr>
-          <td colspan="7">No companies yet.</td>
-        </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<h1>Company Setup</h1>
+<form method="post" action="/company">
+  <input type="hidden" name="company_id" value="{{ edit_company.id if edit_company else '' }}" />
+  <div><label>Name</label><br /><input type="text" name="name" required value="{{ edit_company.name if edit_company else '' }}" /></div>
+  <div><label>FEIN</label><br /><input type="text" name="fein" required value="{{ edit_company.fein if edit_company else '' }}" /></div>
+  <div><label>Florida Account Number</label><br /><input type="text" name="florida_account_number" required value="{{ edit_company.florida_account_number if edit_company else '' }}" /></div>
+  <div><label>Default Tax Year</label><br /><input type="number" name="default_tax_year" required value="{{ edit_company.default_tax_year if edit_company else '' }}" /></div>
+  <div><label>FL SUTA Rate</label><br /><input type="number" step="0.0001" name="fl_suta_rate" required value="{{ edit_company.fl_suta_rate if edit_company else '' }}" /></div>
+  <button type="submit">{{ "Update Company" if edit_company else "Create Company" }}</button>
+</form>
+<h2>Saved Companies</h2>
+<table><thead><tr><th>ID</th><th>Name</th><th>FEIN</th><th>Florida Account</th><th>Tax Year</th><th>SUTA Rate</th><th>Actions</th></tr></thead><tbody>
+{% for company in companies %}
+<tr><td>{{ company.id }}</td><td>{{ company.name }}</td><td>{{ company.fein }}</td><td>{{ company.florida_account_number }}</td><td>{{ company.default_tax_year }}</td><td>{{ company.fl_suta_rate }}</td><td class="actions"><a href="/company?edit_id={{ company.id }}">Edit</a><form method="post" action="/company/{{ company.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>
+{% else %}<tr><td colspan="7">No companies yet.</td></tr>{% endfor %}
+</tbody></table>
 {% endblock %}
