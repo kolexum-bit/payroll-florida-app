@@ -1,57 +1,93 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from app.models import Employee
+
+
+DATA_DIR = Path("data/tax")
 
 
 def round2(value: float) -> float:
     return round(value + 1e-9, 2)
 
 
-def calculate_monthly_payroll(employee: Employee, hours_worked: float | None = None) -> dict:
-    use_hours = hours_worked if hours_worked is not None else employee.default_hours_per_month
-    if employee.pay_type == "hourly":
-        gross = employee.base_rate * use_hours
-    else:
-        gross = employee.base_rate
+def load_tax_year_data(year: int) -> dict:
+    path = DATA_DIR / str(year) / "rates.json"
+    with path.open("r", encoding="utf-8") as f:
+        return json.load(f)
 
-    annualized_gross = gross * 12
-    taxable_income = max(0.0, annualized_gross + employee.w4_other_income - employee.w4_deductions)
-    estimated_federal_annual = max(0.0, taxable_income * 0.1 - employee.w4_dependents_amount)
-    federal = estimated_federal_annual / 12 + employee.w4_extra_withholding
 
-    social_security = gross * 0.062
-    medicare = gross * 0.0145
-    net = gross - federal - social_security - medicare
+def calculate_monthly_payroll(
+    employee: Employee,
+    year: int,
+    bonus: float,
+    reimbursements: float,
+    deductions: float,
+    ytd_ss_wages: float,
+    ytd_medicare_wages: float,
+    ytd_futa_wages: float,
+    ytd_suta_wages: float,
+    company_suta_rate_percent: float,
+) -> dict:
+    tax = load_tax_year_data(year)
+    gross = max(0.0, employee.monthly_salary + bonus)
+    taxable_wages = max(0.0, gross - deductions)
+
+    annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
+    fit_cfg = tax["fit"][employee.filing_status]
+    fit_annual = max(0.0, (annualized - fit_cfg["standard_deduction"]) * fit_cfg["flat_rate"] - employee.w4_dependents_amount)
+    federal = fit_annual / 12 + employee.w4_extra_withholding
+
+    ss_cfg = tax["social_security"]
+    medicare_cfg = tax["medicare"]
+    futa_cfg = tax["futa"]
+    suta_wage_base = tax["suta"]["wage_base"]
+
+    ss_taxable = max(0.0, min(ss_cfg["wage_base"] - ytd_ss_wages, taxable_wages))
+    social_security_ee = ss_taxable * ss_cfg["employee_rate"]
+    social_security_er = ss_taxable * ss_cfg["employer_rate"]
+
+    medicare_ee = taxable_wages * medicare_cfg["rate"]
+    medicare_er = taxable_wages * medicare_cfg["rate"]
+    addl_base = max(0.0, ytd_medicare_wages + taxable_wages - medicare_cfg["additional_threshold"]) - max(0.0, ytd_medicare_wages - medicare_cfg["additional_threshold"])
+    additional_medicare_ee = max(0.0, addl_base) * medicare_cfg["additional_rate"]
+
+    futa_taxable = max(0.0, min(futa_cfg["wage_base"] - ytd_futa_wages, taxable_wages))
+    futa_er = futa_taxable * futa_cfg["rate"]
+
+    suta_taxable = max(0.0, min(suta_wage_base - ytd_suta_wages, taxable_wages))
+    suta_er = suta_taxable * (company_suta_rate_percent / 100)
+
+    net = gross + reimbursements - deductions - federal - social_security_ee - medicare_ee - additional_medicare_ee
 
     trace = {
+        "tax_year": year,
         "inputs": {
-            "pay_type": employee.pay_type,
-            "base_rate": employee.base_rate,
-            "hours_worked": use_hours,
-            "w4_dependents_amount": employee.w4_dependents_amount,
-            "w4_other_income": employee.w4_other_income,
-            "w4_deductions": employee.w4_deductions,
-            "w4_extra_withholding": employee.w4_extra_withholding,
+            "monthly_salary": employee.monthly_salary,
+            "bonus": bonus,
+            "reimbursements": reimbursements,
+            "deductions": deductions,
+            "ytd_ss_wages": ytd_ss_wages,
+            "ytd_medicare_wages": ytd_medicare_wages,
+            "ytd_futa_wages": ytd_futa_wages,
+            "ytd_suta_wages": ytd_suta_wages,
+            "company_suta_rate_percent": company_suta_rate_percent,
         },
-        "steps": {
-            "gross_pay": round2(gross),
-            "annualized_gross": round2(annualized_gross),
-            "taxable_income": round2(taxable_income),
-            "estimated_federal_annual": round2(estimated_federal_annual),
-            "federal_withholding_monthly": round2(federal),
-            "social_security": round2(social_security),
-            "medicare": round2(medicare),
-            "net_pay": round2(net),
-        },
+        "tax_table": tax,
     }
 
     return {
-        "hours_worked": round2(use_hours),
         "gross_pay": round2(gross),
         "federal_withholding": round2(federal),
-        "social_security": round2(social_security),
-        "medicare": round2(medicare),
+        "social_security_ee": round2(social_security_ee),
+        "medicare_ee": round2(medicare_ee),
+        "additional_medicare_ee": round2(additional_medicare_ee),
+        "social_security_er": round2(social_security_er),
+        "medicare_er": round2(medicare_er),
+        "futa_er": round2(futa_er),
+        "suta_er": round2(suta_er),
         "net_pay": round2(net),
-        "taxable_wages": round2(gross),
         "calculation_trace": trace,
     }

@@ -1,25 +1,27 @@
 {% extends "base.html" %}
 {% block title %}Employees | Payroll Florida{% endblock %}
 {% block content %}
-<h1>Employees</h1>
-<form method="post" action="/employees">
+<h1>Employees{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
+{% if not current_company %}<p>Select a company first.</p>{% else %}
+<form method="post" action="/employees?company_id={{ current_company.id }}">
   <input type="hidden" name="employee_id" value="{{ edit_employee.id if edit_employee else '' }}" />
-  <div><label>Company</label><br /><select name="company_id" required>{% for c in companies %}<option value="{{ c.id }}" {% if edit_employee and edit_employee.company_id == c.id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}</select></div>
   <div><label>First Name</label><br /><input name="first_name" required value="{{ edit_employee.first_name if edit_employee else '' }}" /></div>
   <div><label>Last Name</label><br /><input name="last_name" required value="{{ edit_employee.last_name if edit_employee else '' }}" /></div>
-  <div><label>SSN Last 4</label><br /><input name="ssn_last4" maxlength="4" required value="{{ edit_employee.ssn_last4 if edit_employee else '' }}" /></div>
+  <div><label>Address</label><br /><input name="address_line1" required value="{{ edit_employee.address_line1 if edit_employee else '' }}" /></div>
+  <div><label>City</label><br /><input name="city" required value="{{ edit_employee.city if edit_employee else '' }}" /></div>
+  <div><label>State</label><br /><input name="state" maxlength="2" required value="{{ edit_employee.state if edit_employee else 'FL' }}" /></div>
+  <div><label>ZIP</label><br /><input name="zip_code" required value="{{ edit_employee.zip_code if edit_employee else '' }}" /></div>
+  <div><label>SSN</label><br /><input name="ssn" required value="{{ edit_employee.ssn if edit_employee else '' }}" /></div>
   <div><label>Filing Status</label><br /><select name="filing_status"><option value="single">Single</option><option value="married" {% if edit_employee and edit_employee.filing_status=='married' %}selected{% endif %}>Married</option></select></div>
   <div><label>W-4 Dependents Amount</label><br /><input type="number" step="0.01" name="w4_dependents_amount" value="{{ edit_employee.w4_dependents_amount if edit_employee else '0' }}" /></div>
   <div><label>W-4 Other Income</label><br /><input type="number" step="0.01" name="w4_other_income" value="{{ edit_employee.w4_other_income if edit_employee else '0' }}" /></div>
   <div><label>W-4 Deductions</label><br /><input type="number" step="0.01" name="w4_deductions" value="{{ edit_employee.w4_deductions if edit_employee else '0' }}" /></div>
   <div><label>W-4 Extra Withholding</label><br /><input type="number" step="0.01" name="w4_extra_withholding" value="{{ edit_employee.w4_extra_withholding if edit_employee else '0' }}" /></div>
-  <div><label>Pay Type</label><br /><select name="pay_type"><option value="salary">Salary</option><option value="hourly" {% if edit_employee and edit_employee.pay_type=='hourly' %}selected{% endif %}>Hourly</option></select></div>
-  <div><label>Base Rate (monthly salary or hourly rate)</label><br /><input type="number" step="0.01" name="base_rate" required value="{{ edit_employee.base_rate if edit_employee else '' }}" /></div>
-  <div><label>Default Hours per Month</label><br /><input type="number" step="0.01" name="default_hours_per_month" value="{{ edit_employee.default_hours_per_month if edit_employee else '173.33' }}" /></div>
+  <div><label>Monthly Salary</label><br /><input type="number" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
   <button type="submit">{{ 'Update Employee' if edit_employee else 'Create Employee' }}</button>
 </form>
-<h2>Saved Employees</h2>
-<table><thead><tr><th>ID</th><th>Name</th><th>Company</th><th>Pay Type</th><th>Base Rate</th><th>Actions</th></tr></thead><tbody>
-{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.company.name }}</td><td>{{ e.pay_type }}</td><td>{{ e.base_rate }}</td><td class="actions"><a href="/employees?edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
+<table><thead><tr><th>ID</th><th>Name</th><th>Address</th><th>SSN Last4</th><th>Monthly Salary</th><th>Actions</th></tr></thead><tbody>
+{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
 </tbody></table>
+{% endif %}
 {% endblock %}

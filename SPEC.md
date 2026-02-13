@@ -1,25 +1,43 @@
-# Payroll Florida App Spec
+# SPEC
 
-## Persistence Architecture
-- SQLite with SQLAlchemy ORM.
-- Single session factory per app instance.
-- All routes consume the same `db_dependency` generator.
+## Scope
+This implementation supports strict multi-company payroll with per-company data separation.
 
-## Payroll Assumptions
-- Monthly gross for salary employees equals `base_rate`.
-- Monthly gross for hourly employees equals `base_rate * hours_worked`.
-- Simplified withholding model used for deterministic app behavior:
-  - Federal estimate: `max(0, ((gross*12 + other_income - deductions)*10%) - dependents) / 12 + extra_withholding`
-  - Social Security: `6.2%`
-  - Medicare: `1.45%`
-- Rounded to 2 decimals with deterministic helper.
-- Every payroll row stores `calculation_trace` JSON with inputs and step outputs.
+## Data model
+- `employees.company_id` FK to `companies.id`.
+- `monthly_payrolls.company_id` FK to `companies.id`.
+- Unique constraints:
+  - `(company_id, ssn)` for employees.
+  - `(company_id, employee_id, year, month)` for payroll rows.
+- Deletion rule: **cascade delete** company -> employees/payroll.
 
-## Reports
-- RT-6 quarterly wages + contribution estimate.
-- 941 quarterly wages, withholding, and FICA summary.
-- 940 annual FUTA wages + tax estimate.
+## Assumptions and sources
+- Tax year config loaded from `data/tax/{year}/rates.json`.
+- Source metadata stored in tax file (`source` key).
+- FIT uses simplified profile derived from Pub 15-T style inputs (filing status + W-4 fields).
 
-## Export
-- CSV exports for each report.
-- PDF exports rendered with an internal lightweight PDF writer.
+## Rounding
+- Monetary values rounded to 2 decimals after each computed line item.
+
+## Year versioning
+- Calculations load year-specific rates by payroll year.
+- Missing tax file is an error and should be handled by supplying that year config.
+
+## W-2 mapping
+Generated from stored payroll ledger totals:
+- Box 1 = sum(gross_pay)
+- Box 2 = sum(federal_withholding)
+- Box 3 = SS wages derived from EE SS tax / 0.062
+- Box 4 = sum(social_security_ee)
+- Box 5 = Medicare wages derived from medicare_ee / 0.0145
+- Box 6 = sum(medicare_ee + additional_medicare_ee)
+
+## Employer reports mapping
+- RT-6 quarterly:
+  - Total/Taxable wages from payroll rows in quarter.
+  - Tax due from stored `suta_er` rollup.
+- Form 941 quarterly:
+  - FIT withheld + SS EE/ER + Medicare EE/ER + Additional Medicare EE.
+- Form 940 annual:
+  - FUTA taxable wages from payroll FUTA ledger and annual wage cap.
+
