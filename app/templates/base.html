@@ -6,7 +6,8 @@
   <title>{% block title %}Payroll Florida{% endblock %}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 2rem; }
-    nav a { margin-right: 1rem; text-decoration: none; color: #004085; }
+    nav { display:flex; gap:1rem; align-items:center; }
+    nav a { text-decoration: none; color: #004085; }
     .message.success { background: #d4edda; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
     .message.error { background: #f8d7da; color: #721c24; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
     form div { margin-bottom: 0.5rem; }
@@ -18,10 +19,19 @@
 <body>
   <nav>
     <a href="/company">Company</a>
-    <a href="/employees">Employees</a>
-    <a href="/monthly-payroll">Monthly Payroll</a>
-    <a href="/pay-stubs">Pay Stubs</a>
-    <a href="/reports">Reports</a>
+    <a href="/employees{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Employees</a>
+    <a href="/monthly-payroll{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Monthly Payroll</a>
+    <a href="/pay-stubs{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Pay Stubs / W-2</a>
+    <a href="/reports{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Reports</a>
+    <form method="post" action="/select-company" style="margin-left:auto;">
+      <label>Current Company</label>
+      <select name="company_id" onchange="this.form.submit()">
+        <option value="">--select--</option>
+        {% for c in companies %}
+          <option value="{{ c.id }}" {% if current_company and current_company.id == c.id %}selected{% endif %}>{{ c.name }}</option>
+        {% endfor %}
+      </select>
+    </form>
   </nav>
 
   <hr />

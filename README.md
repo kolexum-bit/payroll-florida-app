@@ -1,30 +1,20 @@
-# Payroll Florida App
+# Florida Payroll App (Multi-Company)
 
-A simple web app for Florida payroll workflows with 5 screens:
-- Company
-- Employees
-- Monthly Payroll
-- Pay Stubs
-- Reports (RT-6, 941, 940)
+Run:
+1. `python -m venv .venv && source .venv/bin/activate`
+2. `pip install -r requirements.txt`
+3. `uvicorn app.main:app --reload`
 
-## Run locally
-1. Create a virtual environment.
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Start the app:
-   ```bash
-   uvicorn app.main:app --reload
-   ```
-4. Open `http://127.0.0.1:8000`.
+## Dev DB reset
+- SQLite schema is created automatically on boot.
+- Reset by deleting `payroll.db` then restarting app.
 
-## Run tests
-```bash
-pytest
-```
+## Multi-company flow
+- Create companies on `/company`.
+- Choose **Current Company** in top nav.
+- All Employees, Payroll, Pay Stub/W-2 and Reports are filtered to selected company.
 
-## Notes
-- Uses a single SQLAlchemy + SQLite setup and one DB dependency pattern.
-- Monthly payroll stores `calculation_trace` JSON for auditability.
-- Reports can be exported as CSV or PDF.
+## Tax data
+- Year-versioned files under `data/tax/{year}/rates.json`.
+- Add next year by copying and updating that file; no tax constants are hardcoded in routes.
+

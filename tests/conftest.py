@@ -13,35 +13,26 @@ def client(tmp_path: Path) -> TestClient:
     return TestClient(app)
 
 
-def seed_company(client: TestClient) -> None:
-    client.post(
-        "/company",
-        data={
-            "name": "Acme Co",
-            "fein": "12-3456789",
-            "florida_account_number": "FL-111",
-            "default_tax_year": 2025,
-            "fl_suta_rate": 2.7,
-        },
-    )
+def create_company(client: TestClient, name: str, fein: str, rate: float = 2.7):
+    client.post("/company", data={"name": name, "fein": fein, "florida_account_number": f"{name}-FL", "default_tax_year": 2025, "fl_suta_rate": rate})
 
 
-def seed_employee(client: TestClient) -> None:
-    seed_company(client)
+def create_employee(client: TestClient, company_id: int, ssn: str, first: str = "Jane"):
     client.post(
-        "/employees",
+        f"/employees?company_id={company_id}",
         data={
-            "company_id": 1,
-            "first_name": "Jane",
+            "first_name": first,
             "last_name": "Doe",
-            "ssn_last4": "1234",
+            "address_line1": "1 Main St",
+            "city": "Miami",
+            "state": "FL",
+            "zip_code": "33101",
+            "ssn": ssn,
             "filing_status": "single",
-            "w4_dependents_amount": 500,
+            "w4_dependents_amount": 0,
             "w4_other_income": 0,
-            "w4_deductions": 100,
-            "w4_extra_withholding": 25,
-            "pay_type": "salary",
-            "base_rate": 5000,
-            "default_hours_per_month": 173.33,
+            "w4_deductions": 0,
+            "w4_extra_withholding": 0,
+            "monthly_salary": 5000,
         },
     )
