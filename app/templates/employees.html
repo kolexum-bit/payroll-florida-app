@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Employees{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
 {% if not current_company %}<p>Select a company first.</p>{% else %}
-<form method="post" action="/employees?company_id={{ current_company.id }}">
+<form method="post" action="/employees">
   <input type="hidden" name="employee_id" value="{{ edit_employee.id if edit_employee else '' }}" />
   <div><label>First Name</label><br /><input name="first_name" required value="{{ edit_employee.first_name if edit_employee else '' }}" /></div>
   <div><label>Last Name</label><br /><input name="last_name" required value="{{ edit_employee.last_name if edit_employee else '' }}" /></div>
@@ -21,7 +21,7 @@
   <button type="submit">{{ 'Update Employee' if edit_employee else 'Create Employee' }}</button>
 </form>
 <table><thead><tr><th>ID</th><th>Name</th><th>Address</th><th>SSN Last4</th><th>Monthly Salary</th><th>Actions</th></tr></thead><tbody>
-{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
+{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
 </tbody></table>
 {% endif %}
 {% endblock %}

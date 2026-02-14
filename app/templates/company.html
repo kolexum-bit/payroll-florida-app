@@ -14,7 +14,7 @@
 <h2>Saved Companies</h2>
 <table><thead><tr><th>ID</th><th>Name</th><th>FEIN</th><th>Florida Account</th><th>Tax Year</th><th>SUTA Rate</th><th>Actions</th></tr></thead><tbody>
 {% for company in companies %}
-<tr><td>{{ company.id }}</td><td>{{ company.name }}</td><td>{{ company.fein }}</td><td>{{ company.florida_account_number }}</td><td>{{ company.default_tax_year }}</td><td>{{ company.fl_suta_rate }}</td><td class="actions"><a href="/company?edit_id={{ company.id }}">Edit</a><form method="post" action="/company/{{ company.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>
+<tr><td>{{ company.id }}</td><td>{{ company.name }}</td><td>{{ company.fein }}</td><td>{{ company.florida_account_number }}</td><td>{{ company.default_tax_year }}</td><td>{{ company.fl_suta_rate }}</td><td class="actions"><form method="post" action="/select-company" style="display:inline;"><input type="hidden" name="company_id" value="{{ company.id }}" /><input type="hidden" name="redirect_to" value="/employees" /><button type="submit">Open / Work in this company</button></form><a href="/company?edit_id={{ company.id }}">Edit</a><form method="post" action="/company/{{ company.id }}/delete" style="display:inline;"><button type="submit">Delete</button></form></td></tr>
 {% else %}<tr><td colspan="7">No companies yet.</td></tr>{% endfor %}
 </tbody></table>
 {% endblock %}

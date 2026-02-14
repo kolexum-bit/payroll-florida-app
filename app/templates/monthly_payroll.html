@@ -2,7 +2,7 @@
 {% block content %}
 <h1>Monthly Payroll{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
 {% if current_company %}
-<form method="post" action="/monthly-payroll?company_id={{ current_company.id }}">
+<form method="post" action="/monthly-payroll">
 <input type="hidden" name="record_id" value="{{ edit_record.id if edit_record else '' }}" />
 <div><label>Employee</label><br/><select name="employee_id">{% for e in employees %}<option value="{{ e.id }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}</select></div>
 <div><label>Year</label><input type="number" name="year" value="{{ edit_record.year if edit_record else '' }}" required/></div>
@@ -14,7 +14,7 @@
 <button type="submit">Save Payroll</button>
 </form>
 <table><thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>FIT</th><th>Net</th><th>Actions</th></tr></thead><tbody>
-{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?company_id={{ current_company.id }}&edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete?company_id={{ current_company.id }}"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
+{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
 </tbody></table>
 {% else %}<p>Select company first.</p>{% endif %}
 {% endblock %}

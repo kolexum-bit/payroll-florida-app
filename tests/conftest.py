@@ -17,9 +17,14 @@ def create_company(client: TestClient, name: str, fein: str, rate: float = 2.7):
     client.post("/company", data={"name": name, "fein": fein, "florida_account_number": f"{name}-FL", "default_tax_year": 2025, "fl_suta_rate": rate})
 
 
+def select_company(client: TestClient, company_id: int, redirect_to: str = "/employees"):
+    client.post("/select-company", data={"company_id": company_id, "redirect_to": redirect_to})
+
+
 def create_employee(client: TestClient, company_id: int, ssn: str, first: str = "Jane"):
+    select_company(client, company_id)
     client.post(
-        f"/employees?company_id={company_id}",
+        "/employees",
         data={
             "first_name": first,
             "last_name": "Doe",

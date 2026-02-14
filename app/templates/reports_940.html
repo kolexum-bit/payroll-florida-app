@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% block content %}
 <h1>Form 940 Annual FUTA Summary</h1>
-<form method="get" action="/reports"><input type="hidden" name="report_type" value="940" />{% if current_company %}<input type="hidden" name="company_id" value="{{ current_company.id }}" />{% endif %}
+<form method="get" action="/reports"><input type="hidden" name="report_type" value="940" />
 <div><label>Year</label><input type="number" name="year" value="{{ year }}"/></div><button>Load</button></form>
 <p>Taxable FUTA Wages: {{ report_data.wages }}</p><p>FUTA Tax: {{ report_data.futa_tax }}</p>
-<p><a href="/reports/export/940?company_id={{ current_company.id }}&year={{ year }}&format=csv">CSV</a></p>
+<p><a href="/reports/export/940?year={{ year }}&format=csv">CSV</a></p>
 {% endblock %}

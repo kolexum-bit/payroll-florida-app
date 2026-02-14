@@ -19,19 +19,32 @@
 <body>
   <nav>
     <a href="/company">Company</a>
-    <a href="/employees{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Employees</a>
-    <a href="/monthly-payroll{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Monthly Payroll</a>
-    <a href="/pay-stubs{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Pay Stubs / W-2</a>
-    <a href="/reports{% if current_company %}?company_id={{ current_company.id }}{% endif %}">Reports</a>
-    <form method="post" action="/select-company" style="margin-left:auto;">
-      <label>Current Company</label>
-      <select name="company_id" onchange="this.form.submit()">
-        <option value="">--select--</option>
-        {% for c in companies %}
-          <option value="{{ c.id }}" {% if current_company and current_company.id == c.id %}selected{% endif %}>{{ c.name }}</option>
-        {% endfor %}
-      </select>
-    </form>
+    <a href="/employees">Employees</a>
+    <a href="/monthly-payroll">Monthly Payroll</a>
+    <a href="/pay-stubs">Pay Stubs / W-2</a>
+    <a href="/reports">Reports</a>
+
+    <div style="margin-left:auto; display:flex; align-items:center; gap:0.75rem;">
+      <strong>
+        Current:
+        {% if current_company %}
+          {{ current_company.name }}
+        {% else %}
+          None selected
+        {% endif %}
+      </strong>
+      <form method="post" action="/select-company" style="display:flex; align-items:center; gap:0.5rem;">
+        <input type="hidden" name="redirect_to" value="{{ request.url.path }}" />
+        <label for="company_id">Company</label>
+        <select id="company_id" name="company_id" required>
+          <option value="">-- Select a company --</option>
+          {% for c in companies %}
+            <option value="{{ c.id }}" {% if current_company and current_company.id == c.id %}selected{% endif %}>{{ c.name }} ({{ c.fein }})</option>
+          {% endfor %}
+        </select>
+        <button type="submit">Set Company</button>
+      </form>
+    </div>
   </nav>
 
   <hr />

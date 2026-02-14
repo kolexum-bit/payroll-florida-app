@@ -27,11 +27,19 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def db_dependency():
         yield from get_db(session_factory)
 
+    def get_current_company_id(request: Request) -> int | None:
+        current_id = request.cookies.get("current_company_id")
+        return int(current_id) if current_id else None
+
     def current_company(request: Request, db: Session) -> Company | None:
-        cid = request.query_params.get("company_id") or request.cookies.get("current_company_id")
+        cid = get_current_company_id(request)
         if not cid:
             return None
-        return db.get(Company, int(cid))
+        company = db.get(Company, cid)
+        return company
+
+    def redirect_to_company_selection() -> RedirectResponse:
+        return RedirectResponse(url="/company?message=Please+select+a+company+to+continue.&status=error", status_code=302)
 
     def base_ctx(request: Request, db: Session, **extra):
         companies = db.query(Company).order_by(Company.name.asc()).all()
@@ -43,9 +51,15 @@ def create_app(database_url: str | None = None) -> FastAPI:
         return RedirectResponse(url="/company", status_code=302)
 
     @app.post("/select-company")
-    def select_company(company_id: int = Form(...)):
-        resp = RedirectResponse(url=f"/employees?company_id={company_id}", status_code=302)
-        resp.set_cookie("current_company_id", str(company_id), httponly=True)
+    def select_company(request: Request, company_id: int = Form(...), redirect_to: str | None = Form(default=None), db: Session = Depends(db_dependency)):
+        company = db.get(Company, company_id)
+        if not company:
+            return RedirectResponse(url="/company?message=Company+not+found&status=error", status_code=302)
+        destination = redirect_to or request.headers.get("referer") or "/employees"
+        if not destination.startswith("/"):
+            destination = "/employees"
+        resp = RedirectResponse(url=destination, status_code=302)
+        resp.set_cookie("current_company_id", str(company.id), httponly=True, samesite="lax")
         return resp
 
     @app.get("/company")
@@ -84,10 +98,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.get("/employees")
     def employee_page(request: Request, edit_id: int | None = None, message: str | None = None, status: str = "success", db: Session = Depends(db_dependency)):
         company = current_company(request, db)
-        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.id.asc()).all() if company else []
-        edit_employee = db.get(Employee, edit_id) if edit_id and company else None
+        if not company:
+            return redirect_to_company_selection()
+        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.id.asc()).all()
+        edit_employee = db.get(Employee, edit_id) if edit_id else None
         if edit_employee and edit_employee.company_id != company.id:
-            edit_employee = None
+            return RedirectResponse(url="/employees?message=Employee+not+found&status=error", status_code=302)
         return templates.TemplateResponse("employees.html", base_ctx(request, db, employees=employees, edit_employee=edit_employee, message=message, status=status))
 
     @app.post("/employees")
@@ -111,10 +127,10 @@ def create_app(database_url: str | None = None) -> FastAPI:
     ):
         company = current_company(request, db)
         if not company:
-            return RedirectResponse(url="/employees?message=Select+a+company+first&status=error", status_code=302)
+            return redirect_to_company_selection()
         emp = db.get(Employee, employee_id) if employee_id else Employee(company_id=company.id)
         if employee_id and (not emp or emp.company_id != company.id):
-            return RedirectResponse(url=f"/employees?company_id={company.id}&message=Employee+not+found&status=error", status_code=302)
+            return RedirectResponse(url="/employees?message=Employee+not+found&status=error", status_code=302)
         for k, v in {
             "first_name": first_name, "last_name": last_name, "address_line1": address_line1, "city": city,
             "state": state.upper(), "zip_code": zip_code, "ssn": ssn, "filing_status": filing_status,
@@ -128,35 +144,41 @@ def create_app(database_url: str | None = None) -> FastAPI:
             db.commit()
         except IntegrityError:
             db.rollback()
-            return RedirectResponse(url=f"/employees?company_id={company.id}&message=SSN+must+be+unique+within+company&status=error", status_code=302)
-        return RedirectResponse(url=f"/employees?company_id={company.id}&message={'Employee+updated' if employee_id else 'Employee+created'}&status=success", status_code=302)
+            return RedirectResponse(url="/employees?message=SSN+must+be+unique+within+company&status=error", status_code=302)
+        return RedirectResponse(url=f"/employees?message={'Employee+updated' if employee_id else 'Employee+created'}&status=success", status_code=302)
 
     @app.post("/employees/{employee_id}/delete")
     def delete_employee(request: Request, employee_id: int, db: Session = Depends(db_dependency)):
         company = current_company(request, db)
+        if not company:
+            return redirect_to_company_selection()
         emp = db.get(Employee, employee_id)
         if not company or not emp or emp.company_id != company.id:
-            return RedirectResponse(url=f"/employees?company_id={company.id if company else ''}&message=Employee+not+found&status=error", status_code=302)
+            return RedirectResponse(url="/employees?message=Employee+not+found&status=error", status_code=302)
         db.delete(emp)
         db.commit()
-        return RedirectResponse(url=f"/employees?company_id={company.id}&message=Employee+deleted&status=success", status_code=302)
+        return RedirectResponse(url="/employees?message=Employee+deleted&status=success", status_code=302)
 
     @app.get("/monthly-payroll")
     def payroll_page(request: Request, edit_id: int | None = None, message: str | None = None, status: str = "success", db: Session = Depends(db_dependency)):
         company = current_company(request, db)
-        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.last_name.asc()).all() if company else []
-        records = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id).order_by(MonthlyPayroll.year.desc(), MonthlyPayroll.month.desc()).all() if company else []
-        edit_record = db.get(MonthlyPayroll, edit_id) if edit_id and company else None
+        if not company:
+            return redirect_to_company_selection()
+        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.last_name.asc()).all()
+        records = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id).order_by(MonthlyPayroll.year.desc(), MonthlyPayroll.month.desc()).all()
+        edit_record = db.get(MonthlyPayroll, edit_id) if edit_id else None
         if edit_record and edit_record.company_id != company.id:
-            edit_record = None
+            return RedirectResponse(url="/monthly-payroll?message=Payroll+record+not+found&status=error", status_code=302)
         return templates.TemplateResponse("monthly_payroll.html", base_ctx(request, db, employees=employees, records=records, edit_record=edit_record, message=message, status=status))
 
     @app.post("/monthly-payroll")
     def upsert_payroll(request: Request, record_id: int | None = Form(default=None), employee_id: int = Form(...), year: int = Form(...), month: int = Form(...), pay_date: date = Form(...), bonus: float = Form(0.0), reimbursements: float = Form(0.0), deductions: float = Form(0.0), db: Session = Depends(db_dependency)):
         company = current_company(request, db)
+        if not company:
+            return redirect_to_company_selection()
         employee = db.get(Employee, employee_id)
         if not company or not employee or employee.company_id != company.id:
-            return RedirectResponse(url=f"/monthly-payroll?company_id={company.id if company else ''}&message=Employee+outside+company+scope&status=error", status_code=302)
+            return RedirectResponse(url="/monthly-payroll?message=Employee+outside+company+scope&status=error", status_code=302)
 
         ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month < month)
         ytd_records = ytd.all()
@@ -174,7 +196,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         )
         rec = db.get(MonthlyPayroll, record_id) if record_id else MonthlyPayroll(company_id=company.id, employee_id=employee_id)
         if record_id and (not rec or rec.company_id != company.id):
-            return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message=Payroll+record+not+found&status=error", status_code=302)
+            return RedirectResponse(url="/monthly-payroll?message=Payroll+record+not+found&status=error", status_code=302)
         rec.company_id, rec.employee_id, rec.year, rec.month, rec.pay_date = company.id, employee_id, year, month, pay_date
         rec.bonus, rec.reimbursements, rec.deductions = bonus, reimbursements, deductions
         for key, value in result.items():
@@ -182,31 +204,37 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if not record_id:
             db.add(rec)
         db.commit()
-        return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={'Payroll+updated' if record_id else 'Payroll+created'}&status=success", status_code=302)
+        return RedirectResponse(url=f"/monthly-payroll?message={'Payroll+updated' if record_id else 'Payroll+created'}&status=success", status_code=302)
 
     @app.post("/monthly-payroll/{record_id}/delete")
     def delete_payroll(request: Request, record_id: int, db: Session = Depends(db_dependency)):
         company = current_company(request, db)
+        if not company:
+            return redirect_to_company_selection()
         rec = db.get(MonthlyPayroll, record_id)
         if not company or not rec or rec.company_id != company.id:
-            return RedirectResponse(url=f"/monthly-payroll?company_id={company.id if company else ''}&message=Record+not+found&status=error", status_code=302)
+            return RedirectResponse(url="/monthly-payroll?message=Record+not+found&status=error", status_code=302)
         db.delete(rec)
         db.commit()
-        return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message=Payroll+deleted&status=success", status_code=302)
+        return RedirectResponse(url="/monthly-payroll?message=Payroll+deleted&status=success", status_code=302)
 
     @app.get("/pay-stubs")
     def pay_stubs_page(request: Request, message: str | None = None, status: str = "success", db: Session = Depends(db_dependency)):
         company = current_company(request, db)
-        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.last_name.asc()).all() if company else []
-        records = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id).order_by(MonthlyPayroll.year.desc(), MonthlyPayroll.month.desc()).all() if company else []
+        if not company:
+            return redirect_to_company_selection()
+        employees = db.query(Employee).filter(Employee.company_id == company.id).order_by(Employee.last_name.asc()).all()
+        records = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id).order_by(MonthlyPayroll.year.desc(), MonthlyPayroll.month.desc()).all()
         return templates.TemplateResponse("pay_stubs.html", base_ctx(request, db, employees=employees, records=records, message=message, status=status))
 
     @app.post("/pay-stubs/generate")
     def generate_pay_stub(request: Request, employee_id: int = Form(...), year: int = Form(...), month: int = Form(...), db: Session = Depends(db_dependency)):
         company = current_company(request, db)
-        record = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == (company.id if company else -1), MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month == month).first()
-        if not company or not record:
-            return RedirectResponse(url=f"/pay-stubs?company_id={company.id if company else ''}&message=No+payroll+record+found&status=error", status_code=302)
+        if not company:
+            return redirect_to_company_selection()
+        record = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month == month).first()
+        if not record:
+            return RedirectResponse(url="/pay-stubs?message=No+payroll+record+found&status=error", status_code=302)
         emp = record.employee
         ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month <= month).all()
         lines = ["Monthly Pay Stub", f"Company: {company.name}", f"Employee: {emp.first_name} {emp.last_name}", f"Year/Month: {record.year}/{record.month}", f"Pay Date: {record.pay_date.isoformat()}", f"Gross: {record.gross_pay:.2f}", f"Net Pay: {record.net_pay:.2f}", "Gross & Net by Month (YTD)"]
@@ -217,9 +245,11 @@ def create_app(database_url: str | None = None) -> FastAPI:
     @app.post("/w2/generate/{employee_id}")
     def generate_w2(request: Request, employee_id: int, year: int = Form(...), db: Session = Depends(db_dependency)):
         company = current_company(request, db)
+        if not company:
+            return redirect_to_company_selection()
         employee = db.get(Employee, employee_id)
         if not company or not employee or employee.company_id != company.id:
-            return RedirectResponse(url=f"/pay-stubs?company_id={company.id if company else ''}&message=Employee+not+found&status=error", status_code=302)
+            return RedirectResponse(url="/pay-stubs?message=Employee+not+found&status=error", status_code=302)
         totals = employee_w2_totals(db, company.id, employee_id, year)
         lines = ["W-2 Wage and Tax Statement", f"Employer: {company.name}", f"Employee: {employee.first_name} {employee.last_name}", f"SSN (last4): {employee.ssn_last4}", f"Tax Year: {year}", f"Box 1 Wages: {totals['box1_wages']:.2f}", f"Box 2 FIT: {totals['box2_fit']:.2f}", f"Box 3 SS Wages: {totals['box3_ss_wages']:.2f}", f"Box 4 SS Tax: {totals['box4_ss_tax']:.2f}", f"Box 5 Medicare Wages: {totals['box5_medicare_wages']:.2f}", f"Box 6 Medicare Tax: {totals['box6_medicare_tax']:.2f}"]
         return Response(content=create_pay_stub_pdf_bytes(lines), media_type="application/pdf")
@@ -228,7 +258,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def generate_w2_batch(request: Request, year: int = Form(...), db: Session = Depends(db_dependency)):
         company = current_company(request, db)
         if not company:
-            return RedirectResponse(url="/pay-stubs?message=Select+a+company+first&status=error", status_code=302)
+            return redirect_to_company_selection()
         employees = db.query(Employee).filter(Employee.company_id == company.id).all()
         lines = [f"Batch W-2 Summary {company.name} {year}"]
         for e in employees:
@@ -247,7 +277,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def reports_page(request: Request, year: int = date.today().year, quarter: int = 1, report_type: str = "rt6", db: Session = Depends(db_dependency)):
         company = current_company(request, db)
         if not company:
-            return templates.TemplateResponse("reports_rt6.html", base_ctx(request, db, year=year, quarter=quarter, report_type="rt6", report_data={"wages": 0, "contributions_due": 0, "line_mapping": {}}))
+            return redirect_to_company_selection()
         if report_type == "941":
             report_data = form941_summary(db, company.id, year, quarter)
             template = "reports_941.html"
@@ -263,7 +293,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def export_report(request: Request, report_type: str, format: str = "csv", year: int = date.today().year, quarter: int = 1, db: Session = Depends(db_dependency)):
         company = current_company(request, db)
         if not company:
-            return RedirectResponse(url="/reports?message=Select+a+company+first&status=error", status_code=302)
+            return redirect_to_company_selection()
         if report_type == "941":
             data = form941_summary(db, company.id, year, quarter)
             if format == "pdf":
