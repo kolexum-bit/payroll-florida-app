@@ -3,6 +3,9 @@
 <h1>Form 941 Quarterly Summary</h1>
 <form method="get" action="/reports"><input type="hidden" name="report_type" value="941" />{% if current_company %}<input type="hidden" name="company_id" value="{{ current_company.id }}" />{% endif %}
 <div><label>Year</label><input type="number" name="year" value="{{ year }}"/></div><div><label>Quarter</label><input type="number" min="1" max="4" name="quarter" value="{{ quarter }}"/></div><button>Load</button></form>
+<p>Wages: {{ report_data.wages }}</p>
+<p>FIT Withholding: {{ report_data.federal_withholding }}</p>
 <p>Total Tax: {{ report_data.total_tax }}</p>
+<h3>SPEC Mapping</h3><ul>{% for line, desc in report_data.line_mapping.items() %}<li><strong>{{ line }}</strong>: {{ desc }}</li>{% endfor %}</ul>
 <p><a href="/reports/export/941?company_id={{ current_company.id }}&year={{ year }}&quarter={{ quarter }}&format=csv">CSV</a></p>
 {% endblock %}

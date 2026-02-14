@@ -57,7 +57,7 @@ def form941_summary(db: Session, company_id: int, year: int, quarter: int) -> di
 
 def form940_summary(db: Session, company_id: int, year: int) -> dict:
     records = _base_query(db, company_id, year).all()
-    taxable_wages = round(sum(r.futa_er / 0.006 if r.futa_er else 0 for r in records), 2)
+    taxable_wages = round(sum((r.calculation_trace or {}).get("steps", {}).get("futa_taxable_wages", 0.0) for r in records), 2)
     futa_tax = round(sum(r.futa_er for r in records), 2)
     return {
         "records": records,
@@ -78,9 +78,9 @@ def employee_w2_totals(db: Session, company_id: int, employee_id: int, year: int
     ).all()
     gross = round(sum(r.gross_pay for r in records), 2)
     fit = round(sum(r.federal_withholding for r in records), 2)
-    ss_wages = round(sum(r.social_security_ee / 0.062 if r.social_security_ee else 0 for r in records), 2)
+    ss_wages = round(sum((r.calculation_trace or {}).get("steps", {}).get("ss_taxable_wages", 0.0) for r in records), 2)
     ss_tax = round(sum(r.social_security_ee for r in records), 2)
-    med_wages = round(sum(r.medicare_ee / 0.0145 if r.medicare_ee else 0 for r in records), 2)
+    med_wages = round(sum((r.calculation_trace or {}).get("steps", {}).get("medicare_taxable_wages", 0.0) for r in records), 2)
     med_tax = round(sum(r.medicare_ee + r.additional_medicare_ee for r in records), 2)
     return {
         "records": records,

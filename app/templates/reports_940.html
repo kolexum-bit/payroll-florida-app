@@ -3,6 +3,8 @@
 <h1>Form 940 Annual FUTA Summary</h1>
 <form method="get" action="/reports"><input type="hidden" name="report_type" value="940" />{% if current_company %}<input type="hidden" name="company_id" value="{{ current_company.id }}" />{% endif %}
 <div><label>Year</label><input type="number" name="year" value="{{ year }}"/></div><button>Load</button></form>
-<p>Taxable FUTA Wages: {{ report_data.wages }}</p><p>FUTA Tax: {{ report_data.futa_tax }}</p>
+<p>Taxable FUTA Wages: {{ report_data.wages }}</p>
+<p>FUTA Tax: {{ report_data.futa_tax }}</p>
+<h3>SPEC Mapping</h3><ul>{% for line, desc in report_data.line_mapping.items() %}<li><strong>{{ line }}</strong>: {{ desc }}</li>{% endfor %}</ul>
 <p><a href="/reports/export/940?company_id={{ current_company.id }}&year={{ year }}&format=csv">CSV</a></p>
 {% endblock %}

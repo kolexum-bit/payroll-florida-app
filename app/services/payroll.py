@@ -6,7 +6,12 @@ from pathlib import Path
 from app.models import Employee
 
 
-DATA_DIR = Path("data/tax")
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DATA_DIR = PROJECT_ROOT / "data" / "tax"
+
+
+class TaxConfigError(Exception):
+    pass
 
 
 def round2(value: float) -> float:
@@ -15,8 +20,18 @@ def round2(value: float) -> float:
 
 def load_tax_year_data(year: int) -> dict:
     path = DATA_DIR / str(year) / "rates.json"
-    with path.open("r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with path.open("r", encoding="utf-8") as f:
+            data = json.load(f)
+    except FileNotFoundError as exc:
+        raise TaxConfigError(f"Missing tax configuration: {path}") from exc
+
+    required_keys = ["fit", "social_security", "medicare", "futa", "suta"]
+    missing = [key for key in required_keys if key not in data]
+    if missing:
+        raise TaxConfigError(f"Missing tax configuration keys for {year}: {', '.join(missing)}")
+    return data
+
 
 
 def calculate_monthly_payroll(
@@ -32,50 +47,80 @@ def calculate_monthly_payroll(
     company_suta_rate_percent: float,
 ) -> dict:
     tax = load_tax_year_data(year)
-    gross = max(0.0, employee.monthly_salary + bonus)
-    taxable_wages = max(0.0, gross - deductions)
-
-    annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
     fit_cfg = tax["fit"][employee.filing_status]
-    fit_annual = max(0.0, (annualized - fit_cfg["standard_deduction"]) * fit_cfg["flat_rate"] - employee.w4_dependents_amount)
-    federal = fit_annual / 12 + employee.w4_extra_withholding
-
     ss_cfg = tax["social_security"]
     medicare_cfg = tax["medicare"]
     futa_cfg = tax["futa"]
     suta_wage_base = tax["suta"]["wage_base"]
 
-    ss_taxable = max(0.0, min(ss_cfg["wage_base"] - ytd_ss_wages, taxable_wages))
+    gross = max(0.0, employee.monthly_salary + bonus + reimbursements)
+    taxable_wages = max(0.0, gross - deductions)
+
+    annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
+    fit_taxable = max(0.0, annualized - fit_cfg["standard_deduction"])
+    fit_annual = max(0.0, fit_taxable * fit_cfg["flat_rate"] - employee.w4_dependents_amount)
+    federal = fit_annual / 12 + employee.w4_extra_withholding
+
+    ss_remaining = max(0.0, ss_cfg["wage_base"] - ytd_ss_wages)
+    ss_taxable = min(ss_remaining, taxable_wages)
     social_security_ee = ss_taxable * ss_cfg["employee_rate"]
     social_security_er = ss_taxable * ss_cfg["employer_rate"]
 
-    medicare_ee = taxable_wages * medicare_cfg["rate"]
-    medicare_er = taxable_wages * medicare_cfg["rate"]
-    addl_base = max(0.0, ytd_medicare_wages + taxable_wages - medicare_cfg["additional_threshold"]) - max(0.0, ytd_medicare_wages - medicare_cfg["additional_threshold"])
-    additional_medicare_ee = max(0.0, addl_base) * medicare_cfg["additional_rate"]
+    medicare_ee = taxable_wages * medicare_cfg["employee_rate"]
+    medicare_er = taxable_wages * medicare_cfg["employer_rate"]
+    additional_threshold = medicare_cfg["additional_threshold"][employee.filing_status]
+    addl_base = max(0.0, (ytd_medicare_wages + taxable_wages) - additional_threshold) - max(0.0, ytd_medicare_wages - additional_threshold)
+    additional_medicare_ee = max(0.0, addl_base) * medicare_cfg["additional_employee_rate"]
 
-    futa_taxable = max(0.0, min(futa_cfg["wage_base"] - ytd_futa_wages, taxable_wages))
-    futa_er = futa_taxable * futa_cfg["rate"]
+    futa_remaining = max(0.0, futa_cfg["wage_base"] - ytd_futa_wages)
+    futa_taxable = min(futa_remaining, taxable_wages)
+    futa_er = futa_taxable * futa_cfg["employer_rate"]
 
-    suta_taxable = max(0.0, min(suta_wage_base - ytd_suta_wages, taxable_wages))
+    suta_remaining = max(0.0, suta_wage_base - ytd_suta_wages)
+    suta_taxable = min(suta_remaining, taxable_wages)
     suta_er = suta_taxable * (company_suta_rate_percent / 100)
 
-    net = gross + reimbursements - deductions - federal - social_security_ee - medicare_ee - additional_medicare_ee
+    employee_taxes = federal + social_security_ee + medicare_ee + additional_medicare_ee
+    net = gross - employee_taxes - deductions
 
     trace = {
         "tax_year": year,
+        "source": tax.get("source"),
+        "files": [f"data/tax/{year}/rates.json"],
         "inputs": {
             "monthly_salary": employee.monthly_salary,
             "bonus": bonus,
             "reimbursements": reimbursements,
             "deductions": deductions,
-            "ytd_ss_wages": ytd_ss_wages,
-            "ytd_medicare_wages": ytd_medicare_wages,
-            "ytd_futa_wages": ytd_futa_wages,
-            "ytd_suta_wages": ytd_suta_wages,
-            "company_suta_rate_percent": company_suta_rate_percent,
+            "w4": {
+                "filing_status": employee.filing_status,
+                "dependents_amount": employee.w4_dependents_amount,
+                "other_income": employee.w4_other_income,
+                "deductions": employee.w4_deductions,
+                "extra_withholding": employee.w4_extra_withholding,
+            },
+            "ytd": {
+                "ss_wages": ytd_ss_wages,
+                "medicare_wages": ytd_medicare_wages,
+                "futa_wages": ytd_futa_wages,
+                "suta_wages": ytd_suta_wages,
+            },
         },
-        "tax_table": tax,
+        "steps": {
+            "gross_pay": gross,
+            "taxable_wages": taxable_wages,
+            "fit_annualized_wages": annualized,
+            "fit_taxable_annual_wages": fit_taxable,
+            "ss_taxable_wages": ss_taxable,
+            "medicare_taxable_wages": taxable_wages,
+            "additional_medicare_taxable_wages": addl_base,
+            "futa_taxable_wages": futa_taxable,
+            "suta_taxable_wages": suta_taxable,
+            "ss_wage_base_remaining": ss_remaining,
+            "futa_wage_base_remaining": futa_remaining,
+            "suta_wage_base_remaining": suta_remaining,
+        },
+        "rounding": "Rounded to 2 decimals after each line item",
     }
 
     return {
