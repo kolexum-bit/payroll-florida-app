@@ -19,12 +19,20 @@ from sqlalchemy.orm import Session
 from app.database import create_session_factory, get_db
 from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
-from app.services.payroll import TaxConfigError, calculate_monthly_payroll
-from app.services.pdf import create_pay_stub_pdf_bytes
+from app.services.payroll import TaxConfigError, calculate_monthly_payroll, tax_year_available
+from app.services.pdf import create_monthly_pay_stub_pdf_bytes, create_pay_stub_pdf_bytes
 from app.utils.rates import format_rate_percent, parse_rate_to_decimal
 
 logger = logging.getLogger(__name__)
 
+
+
+PAY_FREQUENCY_OPTIONS = ["daily", "weekly", "biweekly", "semimonthly", "monthly"]
+FILING_STATUS_OPTIONS = [
+    "single_or_married_filing_separately",
+    "married_filing_jointly",
+    "head_of_household",
+]
 
 def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="Payroll Florida App")
@@ -152,7 +160,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         edit_employee = db.get(Employee, edit_id) if edit_id and company else None
         if edit_employee and edit_employee.company_id != company.id:
             edit_employee = None
-        return templates.TemplateResponse("employees.html", base_ctx(request, db, employees=employees, edit_employee=edit_employee, message=message, status=status))
+        return templates.TemplateResponse("employees.html", base_ctx(request, db, employees=employees, edit_employee=edit_employee, message=message, status=status, pay_frequency_options=PAY_FREQUENCY_OPTIONS, filing_status_options=FILING_STATUS_OPTIONS))
 
     @app.post("/employees")
     def upsert_employee(
@@ -165,6 +173,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         state: str = Form(...),
         zip_code: str = Form(...),
         ssn: str = Form(...),
+        pay_frequency: str = Form(...),
         filing_status: str = Form(...),
         w4_dependents_amount: float = Form(0.0),
         w4_other_income: float = Form(0.0),
@@ -179,6 +188,19 @@ def create_app(database_url: str | None = None) -> FastAPI:
         emp = db.get(Employee, employee_id) if employee_id else Employee(company_id=company.id)
         if employee_id and (not emp or emp.company_id != company.id):
             return RedirectResponse(url=f"/employees?company_id={company.id}&message=Employee+not+found&status=error", status_code=302)
+        if pay_frequency not in PAY_FREQUENCY_OPTIONS:
+            return RedirectResponse(url=f"/employees?company_id={company.id}&message=Invalid+pay+frequency&status=error", status_code=302)
+        if filing_status not in FILING_STATUS_OPTIONS:
+            return RedirectResponse(url=f"/employees?company_id={company.id}&message=Invalid+filing+status&status=error", status_code=302)
+        numeric_fields = {
+            "w4_dependents_amount": w4_dependents_amount,
+            "w4_other_income": w4_other_income,
+            "w4_deductions": w4_deductions,
+            "w4_extra_withholding": w4_extra_withholding,
+            "monthly_salary": monthly_salary,
+        }
+        if any(v < 0 for v in numeric_fields.values()):
+            return RedirectResponse(url=f"/employees?company_id={company.id}&message=Numeric+fields+must+be+zero+or+greater&status=error", status_code=302)
         for k, v in {
             "first_name": first_name,
             "last_name": last_name,
@@ -187,6 +209,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
             "state": state.upper(),
             "zip_code": zip_code,
             "ssn": ssn,
+            "pay_frequency": pay_frequency,
             "filing_status": filing_status,
             "w4_dependents_amount": w4_dependents_amount,
             "w4_other_income": w4_other_income,
@@ -222,19 +245,30 @@ def create_app(database_url: str | None = None) -> FastAPI:
         edit_record = db.get(MonthlyPayroll, edit_id) if edit_id and company else None
         if edit_record and edit_record.company_id != company.id:
             edit_record = None
-        return templates.TemplateResponse("monthly_payroll.html", base_ctx(request, db, employees=employees, records=records, edit_record=edit_record, message=message, status=status))
+        missing_tax_year_banner = None
+        if company and not tax_year_available(company.default_tax_year):
+            missing_tax_year_banner = f"Tax tables for {company.default_tax_year} are missing. Please add /data/tax/{company.default_tax_year}/..."
+        return templates.TemplateResponse("monthly_payroll.html", base_ctx(request, db, employees=employees, records=records, edit_record=edit_record, message=message, status=status, missing_tax_year_banner=missing_tax_year_banner))
 
     @app.post("/monthly-payroll")
-    def upsert_payroll(request: Request, record_id: int | None = Form(default=None), employee_id: int = Form(...), year: int = Form(...), month: int = Form(...), pay_date: date = Form(...), bonus: float = Form(0.0), reimbursements: float = Form(0.0), deductions: float = Form(0.0), db: Session = Depends(db_dependency)):
+    def upsert_payroll(request: Request, record_id: int | None = Form(default=None), employee_id: int = Form(...), year: int | None = Form(default=None), month: int = Form(...), pay_date: date = Form(...), bonus: float = Form(0.0), reimbursements: float = Form(0.0), deductions: float = Form(0.0), db: Session = Depends(db_dependency)):
         company = current_company(request, db)
         employee = db.get(Employee, employee_id)
         if not company or not employee or employee.company_id != company.id:
             return RedirectResponse(url=f"/monthly-payroll?company_id={company.id if company else ''}&message=Employee+outside+company+scope&status=error", status_code=302)
+        calc_year = year or company.default_tax_year
+        if not tax_year_available(calc_year):
+            missing_msg = f"Tax tables for {calc_year} are missing. Please add /data/tax/{calc_year}/..."
+            accepts = request.headers.get("accept", "")
+            if "text/html" in accepts or "*/*" in accepts:
+                msg = quote_plus(missing_msg)
+                return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={msg}&status=error", status_code=302)
+            raise HTTPException(status_code=400, detail=missing_msg)
 
         ytd_records = db.query(MonthlyPayroll).filter(
             MonthlyPayroll.company_id == company.id,
             MonthlyPayroll.employee_id == employee_id,
-            MonthlyPayroll.year == year,
+            MonthlyPayroll.year == calc_year,
             MonthlyPayroll.month < month,
         ).all()
 
@@ -244,7 +278,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         try:
             result = calculate_monthly_payroll(
                 employee=employee,
-                year=year,
+                year=calc_year,
                 bonus=bonus,
                 reimbursements=reimbursements,
                 deductions=deductions,
@@ -265,7 +299,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         existing = db.query(MonthlyPayroll).filter(
             MonthlyPayroll.company_id == company.id,
             MonthlyPayroll.employee_id == employee_id,
-            MonthlyPayroll.year == year,
+            MonthlyPayroll.year == calc_year,
             MonthlyPayroll.month == month,
         ).first()
 
@@ -275,7 +309,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if not rec:
             rec = MonthlyPayroll(company_id=company.id, employee_id=employee_id)
             db.add(rec)
-        rec.company_id, rec.employee_id, rec.year, rec.month, rec.pay_date = company.id, employee_id, year, month, pay_date
+        rec.company_id, rec.employee_id, rec.year, rec.month, rec.pay_date = company.id, employee_id, calc_year, month, pay_date
         rec.bonus, rec.reimbursements, rec.deductions = bonus, reimbursements, deductions
         for key, value in result.items():
             setattr(rec, key, value)
@@ -315,38 +349,29 @@ def create_app(database_url: str | None = None) -> FastAPI:
         ytd_gross = round(sum(r.gross_pay for r in ytd), 2)
         ytd_taxes_deductions = round(sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in ytd), 2)
         ytd_net = round(sum(r.net_pay for r in ytd), 2)
-        logo_line = f"Logo: {company.logo_path}" if company.logo_path else "Logo: none"
+        logo_abs_path = str((static_root / company.logo_path).resolve()) if company.logo_path else None
 
-        lines = [
-            "Monthly Pay Stub",
-            logo_line,
-            f"Company: {company.name}",
-            f"Employee: {emp.first_name} {emp.last_name}",
-            f"Year/Month: {record.year}/{record.month:02d}",
-            f"Pay Date: {record.pay_date.isoformat()}",
-            "",
-            "[Earnings]",
-            f"Salary: {emp.monthly_salary:.2f}",
-            f"Bonus: {record.bonus:.2f}",
-            f"Reimbursements: {record.reimbursements:.2f}",
-            f"Gross: {record.gross_pay:.2f}",
-            "",
-            "[Taxes & Deductions]",
-            f"FIT: {record.federal_withholding:.2f}",
-            f"Social Security EE: {record.social_security_ee:.2f}",
-            f"Medicare EE: {record.medicare_ee:.2f}",
-            f"Additional Medicare EE: {record.additional_medicare_ee:.2f}",
-            f"Other Deductions: {record.deductions:.2f}",
-            "",
-            "[Net Pay]",
-            f"Net: {record.net_pay:.2f}",
-            "",
-            "[YTD Summary]",
-            f"Gross Income YTD: {ytd_gross:.2f}",
-            f"Total Taxes/Deductions YTD: {ytd_taxes_deductions:.2f}",
-            f"Net Income YTD: {ytd_net:.2f}",
-        ]
-        return Response(content=create_pay_stub_pdf_bytes(lines), media_type="application/pdf")
+        pdf_bytes = create_monthly_pay_stub_pdf_bytes(
+            company_name=company.name,
+            employee_name=f"{emp.first_name} {emp.last_name}",
+            pay_period=f"{record.year}/{record.month:02d}",
+            pay_date=record.pay_date.isoformat(),
+            salary=emp.monthly_salary,
+            bonus=record.bonus,
+            reimbursements=record.reimbursements,
+            gross=record.gross_pay,
+            fit=record.federal_withholding,
+            ss_ee=record.social_security_ee,
+            medicare_ee=record.medicare_ee,
+            addl_medicare_ee=record.additional_medicare_ee,
+            other_deductions=record.deductions,
+            net=record.net_pay,
+            ytd_gross=ytd_gross,
+            ytd_taxes_deductions=ytd_taxes_deductions,
+            ytd_net=ytd_net,
+            logo_path=logo_abs_path,
+        )
+        return Response(content=pdf_bytes, media_type="application/pdf")
 
     @app.post("/w2/generate/{employee_id}")
     def generate_w2(request: Request, employee_id: int, year: int = Form(...), db: Session = Depends(db_dependency)):

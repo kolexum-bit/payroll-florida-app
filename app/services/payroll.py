@@ -8,6 +8,18 @@ from app.models import Employee
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = PROJECT_ROOT / "data" / "tax"
+PERIODS_PER_YEAR = {
+    "daily": 260,
+    "weekly": 52,
+    "biweekly": 26,
+    "semimonthly": 24,
+    "monthly": 12,
+}
+FILING_STATUS_KEYS = {
+    "single_or_married_filing_separately",
+    "married_filing_jointly",
+    "head_of_household",
+}
 
 
 class TaxConfigError(Exception):
@@ -18,30 +30,61 @@ def round2(value: float) -> float:
     return round(value + 1e-9, 2)
 
 
-def _validate_fit_config(fit_cfg: dict, year: int, status: str) -> None:
-    if "standard_deduction" not in fit_cfg:
-        raise TaxConfigError(f"Missing FIT standard_deduction for {status} in {year}")
-    if "brackets" not in fit_cfg or not isinstance(fit_cfg["brackets"], list):
-        raise TaxConfigError(f"Missing FIT brackets for {status} in {year}")
-
-
-def load_tax_year_data(year: int) -> dict:
-    path = DATA_DIR / str(year) / "rates.json"
+def _read_json(path: Path) -> dict:
     try:
         with path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
+            return json.load(f)
     except FileNotFoundError as exc:
-        raise TaxConfigError(f"Missing tax configuration: {path}") from exc
+        raise TaxConfigError(f"Tax tables for {path.parent.parent.name if 'fit' in path.parts else path.parent.name} are missing. Please add {path.parent}/...") from exc
 
-    required_keys = ["fit", "social_security", "medicare", "futa", "suta"]
-    missing = [key for key in required_keys if key not in data]
+
+def tax_year_dir(year: int) -> Path:
+    return DATA_DIR / str(year)
+
+
+def tax_year_available(year: int) -> bool:
+    ydir = tax_year_dir(year)
+    return ydir.exists() and (ydir / "rates.json").exists() and (ydir / "metadata.json").exists()
+
+
+def load_tax_year_data(year: int, pay_frequency: str) -> dict:
+    ydir = tax_year_dir(year)
+    rates_path = ydir / "rates.json"
+    metadata_path = ydir / "metadata.json"
+    fit_path = ydir / "fit" / pay_frequency / "percentage_method.json"
+
+    rates = _read_json(rates_path)
+    metadata = _read_json(metadata_path)
+    fit = _read_json(fit_path)
+
+    required_keys = ["social_security", "medicare", "futa", "suta"]
+    missing = [key for key in required_keys if key not in rates]
     if missing:
         raise TaxConfigError(f"Missing tax configuration keys for {year}: {', '.join(missing)}")
-    return data
+
+    for status in FILING_STATUS_KEYS:
+        if status not in fit:
+            raise TaxConfigError(f"Missing FIT table for filing status '{status}' ({year}, {pay_frequency})")
+        status_cfg = fit[status]
+        if "standard_deduction" not in status_cfg or "brackets" not in status_cfg:
+            raise TaxConfigError(f"Invalid FIT table for filing status '{status}' ({year}, {pay_frequency})")
+
+    return {
+        "year": year,
+        "metadata": metadata,
+        "rates": rates,
+        "fit": fit,
+        "files": [
+            f"data/tax/{year}/metadata.json",
+            f"data/tax/{year}/rates.json",
+            f"data/tax/{year}/fit/{pay_frequency}/percentage_method.json",
+        ],
+    }
 
 
 def _annual_fit_from_brackets(taxable_income: float, brackets: list[dict]) -> float:
     tax = 0.0
+    lower = 0.0
     remaining = taxable_income
     for bracket in brackets:
         upper = bracket.get("up_to")
@@ -49,24 +92,14 @@ def _annual_fit_from_brackets(taxable_income: float, brackets: list[dict]) -> fl
         if upper is None:
             tax += max(0.0, remaining) * rate
             break
-        width = max(0.0, float(upper) - bracket.get("_lower", 0.0))
+        width = max(0.0, float(upper) - lower)
         taxed = min(max(0.0, remaining), width)
         tax += taxed * rate
         remaining -= taxed
+        lower = float(upper)
         if remaining <= 0:
             break
     return max(0.0, tax)
-
-
-def _normalize_brackets(brackets: list[dict]) -> list[dict]:
-    lower = 0.0
-    normalized: list[dict] = []
-    for bracket in brackets:
-        item = {"rate": float(bracket["rate"]), "up_to": bracket.get("up_to"), "_lower": lower}
-        if item["up_to"] is not None:
-            lower = float(item["up_to"])
-        normalized.append(item)
-    return normalized
 
 
 def calculate_monthly_payroll(
@@ -81,24 +114,29 @@ def calculate_monthly_payroll(
     ytd_suta_wages: float,
     company_suta_rate_decimal: float,
 ) -> dict:
-    tax = load_tax_year_data(year)
-    fit_cfg = tax["fit"].get(employee.filing_status)
-    if not fit_cfg:
-        raise TaxConfigError(f"Unsupported filing status '{employee.filing_status}' for {year}")
-    _validate_fit_config(fit_cfg, year, employee.filing_status)
-    ss_cfg = tax["social_security"]
-    medicare_cfg = tax["medicare"]
-    futa_cfg = tax["futa"]
-    suta_wage_base = tax["suta"]["wage_base"]
+    pay_frequency = employee.pay_frequency
+    if pay_frequency not in PERIODS_PER_YEAR:
+        raise TaxConfigError(f"Unsupported pay frequency '{pay_frequency}'")
+    if employee.filing_status not in FILING_STATUS_KEYS:
+        raise TaxConfigError(f"Unsupported filing status '{employee.filing_status}'")
 
+    tax_data = load_tax_year_data(year, pay_frequency)
+    rates = tax_data["rates"]
+    fit_cfg = tax_data["fit"][employee.filing_status]
+    ss_cfg = rates["social_security"]
+    medicare_cfg = rates["medicare"]
+    futa_cfg = rates["futa"]
+    suta_wage_base = rates["suta"]["wage_base"]
+
+    periods_per_year = PERIODS_PER_YEAR[pay_frequency]
     gross = max(0.0, employee.monthly_salary + bonus + reimbursements)
     taxable_wages = max(0.0, gross - deductions)
 
-    annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
+    annualized = taxable_wages * periods_per_year + employee.w4_other_income - employee.w4_deductions
     fit_taxable = max(0.0, annualized - float(fit_cfg["standard_deduction"]))
-    fit_brackets = _normalize_brackets(fit_cfg["brackets"])
-    fit_annual = max(0.0, _annual_fit_from_brackets(fit_taxable, fit_brackets) - employee.w4_dependents_amount)
-    federal = fit_annual / 12 + employee.w4_extra_withholding
+    fit_annual_before_credits = _annual_fit_from_brackets(fit_taxable, fit_cfg["brackets"])
+    fit_annual_after_step3 = max(0.0, fit_annual_before_credits - employee.w4_dependents_amount)
+    federal = fit_annual_after_step3 / periods_per_year + employee.w4_extra_withholding
 
     ss_remaining = max(0.0, ss_cfg["wage_base"] - ytd_ss_wages)
     ss_taxable = min(ss_remaining, taxable_wages)
@@ -124,12 +162,17 @@ def calculate_monthly_payroll(
 
     trace = {
         "tax_year": year,
-        "source": tax.get("source"),
-        "files": [f"data/tax/{year}/rates.json"],
+        "source": tax_data["metadata"].get("source"),
+        "version": tax_data["metadata"].get("version"),
+        "files": tax_data["files"],
         "inputs": {
-            "monthly_salary": employee.monthly_salary,
-            "bonus": bonus,
-            "reimbursements": reimbursements,
+            "pay_frequency": pay_frequency,
+            "periods_per_year": periods_per_year,
+            "gross_components": {
+                "base_salary_amount": employee.monthly_salary,
+                "bonus": bonus,
+                "reimbursements": reimbursements,
+            },
             "deductions": deductions,
             "w4": {
                 "filing_status": employee.filing_status,
@@ -150,9 +193,9 @@ def calculate_monthly_payroll(
             "taxable_wages": taxable_wages,
             "fit_annualized_wages": annualized,
             "fit_taxable_annual_wages": fit_taxable,
-            "fit_annual_tax_before_credits": _annual_fit_from_brackets(fit_taxable, fit_brackets),
-            "fit_annual_tax_after_credits": fit_annual,
-            "fit_monthly_withholding": federal,
+            "fit_annual_tax_before_credits": fit_annual_before_credits,
+            "fit_annual_tax_after_step3_credit": fit_annual_after_step3,
+            "fit_period_withholding": federal,
             "ss_taxable_wages": ss_taxable,
             "medicare_taxable_wages": taxable_wages,
             "additional_medicare_taxable_wages": addl_base,

@@ -30,16 +30,24 @@ The schema is recreated automatically at startup.
 - YTD totals are computed per employee, company, and tax year for all records up to the selected pay period month.
 
 ## Tax data configuration
-- Tax-year files are loaded from `data/tax/{year}/rates.json`.
-- FIT withholding uses year-specific Pub 15-T style bracket data in each file (no in-code tax tables).
-- FICA/FUTA/SUTA rates and wage bases are loaded per year from the same JSON.
+- Tax-year files are loaded from `data/tax/{year}/...` using a year-versioned contract.
+- FIT withholding uses IRS Pub 15-T style percentage method tables in frequency-specific files (no in-code tax tables).
+- FICA/FUTA/SUTA rates and wage bases are loaded per year from JSON.
 
-### Required keys in each `rates.json`
-- `fit` (`single`/`married` with `standard_deduction` and `brackets`)
-- `social_security` (`employee_rate`, `employer_rate`, `wage_base`)
-- `medicare` (`employee_rate`, `employer_rate`, `additional_employee_rate`, `additional_threshold`)
-- `futa` (`employer_rate`, `wage_base`)
-- `suta` (`wage_base`)
+### Tax data contract
+- `data/tax/{year}/metadata.json` (`source`, `version`, `last_updated`)
+- `data/tax/{year}/rates.json` (FICA/FUTA/SUTA + Medicare additional thresholds)
+- `data/tax/{year}/fit/{pay_frequency}/percentage_method.json` where `pay_frequency` is one of:
+  - `daily`, `weekly`, `biweekly`, `semimonthly`, `monthly`
+
+### Annual update workflow
+1. Scaffold a new year: `python tools/import_tax_year.py --year 2026 --from-year 2025`
+2. Update:
+   - `data/tax/2026/metadata.json` with official publication/source info and date.
+   - `data/tax/2026/rates.json` for SSA/FICA/FUTA/SUTA changes.
+   - `data/tax/2026/fit/*/percentage_method.json` for Pub 15-T tables by filing status.
+3. Set company **Default Tax Year** to the new year in `/company`.
+4. Run `pytest -q` before release.
 
 ## Tests
 Run all tests:
