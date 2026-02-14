@@ -18,7 +18,7 @@ def _trace_step(record: MonthlyPayroll, key: str) -> float:
     return float((record.calculation_trace or {}).get("steps", {}).get(key, 0.0))
 
 
-def rt6_summary(db: Session, company_id: int, year: int, quarter: int, suta_rate_percent: float) -> dict:
+def rt6_summary(db: Session, company_id: int, year: int, quarter: int, suta_rate_decimal: float) -> dict:
     start, end = _quarter_months(quarter)
     records = _base_query(db, company_id, year).filter(MonthlyPayroll.month >= start, MonthlyPayroll.month <= end).all()
     total_wages = round(sum(_trace_step(r, "taxable_wages") for r in records), 2)
@@ -32,7 +32,7 @@ def rt6_summary(db: Session, company_id: int, year: int, quarter: int, suta_rate
         "line_mapping": {
             "RT-6 Line 1": "Total wages paid",
             "RT-6 Line 2": "Taxable wages (after $7,000 wage base cap)",
-            "RT-6 Line 3": f"Tax due at {suta_rate_percent}%",
+            "RT-6 Line 3": f"Tax due at {(suta_rate_decimal * 100):.3f}%",
         },
     }
 

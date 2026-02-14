@@ -19,6 +19,7 @@ class Company(Base):
     florida_account_number: Mapped[str] = mapped_column(String(64), nullable=False)
     default_tax_year: Mapped[int] = mapped_column(Integer, nullable=False)
     fl_suta_rate: Mapped[float] = mapped_column(Float, nullable=False)
+    logo_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

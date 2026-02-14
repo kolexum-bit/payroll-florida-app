@@ -23,6 +23,12 @@ The schema is recreated automatically at startup.
 5. Generate pay stubs and W-2 PDFs at `/pay-stubs`.
 6. Open `/reports` and switch between RT-6, Form 941, and Form 940.
 
+## UX and calculation behavior
+- FL SUTA rate accepts `%` or decimal input (`2.7`, `2.7%`, `0.027`) and is stored canonically as a decimal value.
+- Company Setup supports optional PNG/JPG logo upload (max 2MB), preview, replace, and remove.
+- Pay stub PDFs include sectioned layout (Earnings, Taxes & Deductions, Net Pay, YTD Summary) and YTD cumulative totals.
+- YTD totals are computed per employee, company, and tax year for all records up to the selected pay period month.
+
 ## Tax data configuration
 - Tax-year files are loaded from `data/tax/{year}/rates.json`.
 - FIT withholding uses year-specific Pub 15-T style bracket data in each file (no in-code tax tables).
@@ -38,4 +44,3 @@ The schema is recreated automatically at startup.
 ## Tests
 Run all tests:
 - `pytest -q`
-

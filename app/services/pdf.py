@@ -6,9 +6,24 @@ def _escape(value: str) -> str:
 
 
 def create_pay_stub_pdf_bytes(lines: list[str]) -> bytes:
-    commands = ["BT", "/F1 12 Tf"]
+    commands = []
+    commands.extend([
+        "0.97 0.97 0.97 rg",
+        "72 742 468 28 re f",
+        "0 0 0 rg",
+    ])
+    commands.extend(["BT", "/F1 12 Tf"])
     y = 760
     for line in lines:
+        if line.startswith("[") and line.endswith("]"):
+            commands.extend([
+                "ET",
+                "0.9 0.9 0.9 rg",
+                f"72 {y - 4} 468 16 re f",
+                "0 0 0 rg",
+                "BT",
+                "/F1 11 Tf",
+            ])
         commands.append(f"1 0 0 1 72 {y} Tm ({_escape(line)}) Tj")
         y -= 18
         if y < 40:

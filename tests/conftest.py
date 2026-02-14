@@ -13,7 +13,7 @@ def client(tmp_path: Path) -> TestClient:
     return TestClient(app)
 
 
-def create_company(client: TestClient, name: str, fein: str, rate: float = 2.7):
+def create_company(client: TestClient, name: str, fein: str, rate: float | str = 2.7):
     client.post("/company", data={"name": name, "fein": fein, "florida_account_number": f"{name}-FL", "default_tax_year": 2025, "fl_suta_rate": rate})
 
 
