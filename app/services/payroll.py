@@ -79,7 +79,7 @@ def calculate_monthly_payroll(
     ytd_medicare_wages: float,
     ytd_futa_wages: float,
     ytd_suta_wages: float,
-    company_suta_rate_percent: float,
+    company_suta_rate_decimal: float,
 ) -> dict:
     tax = load_tax_year_data(year)
     fit_cfg = tax["fit"].get(employee.filing_status)
@@ -117,7 +117,7 @@ def calculate_monthly_payroll(
 
     suta_remaining = max(0.0, suta_wage_base - ytd_suta_wages)
     suta_taxable = min(suta_remaining, taxable_wages)
-    suta_er = suta_taxable * (company_suta_rate_percent / 100)
+    suta_er = suta_taxable * company_suta_rate_decimal
 
     employee_taxes = federal + social_security_ee + medicare_ee + additional_medicare_ee
     net = gross - employee_taxes - deductions

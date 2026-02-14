@@ -1,3 +1,4 @@
+from app.models import MonthlyPayroll
 from tests.conftest import create_company, create_employee
 
 
@@ -51,9 +52,10 @@ def test_pay_stub_pdf_smoke_contains_key_strings(client):
     pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 3})
     assert pay_stub.status_code == 200
     assert b"Alice Doe" in pay_stub.content
+    assert b"Company: A" in pay_stub.content
     assert b"Gross" in pay_stub.content
     assert b"Net" in pay_stub.content
-    assert b"2025/03" in pay_stub.content
+    assert b"YTD" in pay_stub.content
 
 
 def test_w2_pdf_smoke(client):
@@ -65,3 +67,26 @@ def test_w2_pdf_smoke(client):
     assert w2.status_code == 200
     assert b"W-2 Wage and Tax Statement" in w2.content
     assert b"Box 1 Wages" in w2.content
+
+
+def test_pay_stub_pdf_ytd_sums_all_records_for_year(client):
+    create_company(client, "A", "11")
+    create_employee(client, 1, "111-22-3333", "Alice")
+    client.post("/monthly-payroll?company_id=1", data={"employee_id": 1, "year": 2025, "month": 1, "pay_date": "2025-01-31", "bonus": 0, "reimbursements": 0, "deductions": 100})
+    client.post("/monthly-payroll?company_id=1", data={"employee_id": 1, "year": 2025, "month": 2, "pay_date": "2025-02-28", "bonus": 200, "reimbursements": 0, "deductions": 50})
+
+    pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 2})
+    assert pay_stub.status_code == 200
+    assert b"Gross Income YTD" in pay_stub.content
+    assert b"Total Taxes/Deductions YTD" in pay_stub.content
+    assert b"Net Income YTD" in pay_stub.content
+
+    with client.app.state.session_factory() as db:
+        rows = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == 1, MonthlyPayroll.employee_id == 1, MonthlyPayroll.year == 2025, MonthlyPayroll.month <= 2).all()
+        gross_ytd = sum(r.gross_pay for r in rows)
+        total_deductions_ytd = sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in rows)
+        net_ytd = sum(r.net_pay for r in rows)
+
+    assert f"Gross Income YTD: {gross_ytd:.2f}".encode() in pay_stub.content
+    assert f"Total Taxes/Deductions YTD: {total_deductions_ytd:.2f}".encode() in pay_stub.content
+    assert f"Net Income YTD: {net_ytd:.2f}".encode() in pay_stub.content

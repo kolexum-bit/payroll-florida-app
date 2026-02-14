@@ -4,10 +4,13 @@ import csv
 import io
 import logging
 import os
+import shutil
 from datetime import date
+from pathlib import Path
 from urllib.parse import quote_plus
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +21,7 @@ from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
 from app.services.payroll import TaxConfigError, calculate_monthly_payroll
 from app.services.pdf import create_pay_stub_pdf_bytes
+from app.utils.rates import format_rate_percent, parse_rate_to_decimal
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +29,10 @@ logger = logging.getLogger(__name__)
 def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="Payroll Florida App")
     templates = Jinja2Templates(directory="app/templates")
+    static_root = Path("app/static")
+    upload_root = static_root / "uploads"
+    upload_root.mkdir(parents=True, exist_ok=True)
+    app.mount("/static", StaticFiles(directory=static_root), name="static")
     session_factory = create_session_factory(database_url or os.getenv("DATABASE_URL", "sqlite:///./payroll.db"))
     app.state.session_factory = session_factory
 
@@ -40,7 +48,13 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def base_ctx(request: Request, db: Session, **extra):
         companies = db.query(Company).order_by(Company.name.asc()).all()
         company = current_company(request, db)
-        return {"request": request, "companies": companies, "current_company": company, **extra}
+        return {
+            "request": request,
+            "companies": companies,
+            "current_company": company,
+            "format_rate_percent": format_rate_percent,
+            **extra,
+        }
 
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(request: Request, exc: Exception):
@@ -70,14 +84,53 @@ def create_app(database_url: str | None = None) -> FastAPI:
         fein: str = Form(...),
         florida_account_number: str = Form(...),
         default_tax_year: int = Form(...),
-        fl_suta_rate: float = Form(...),
+        fl_suta_rate: str = Form(...),
+        logo: UploadFile | None = File(default=None),
+        remove_logo: str | None = Form(default=None),
         db: Session = Depends(db_dependency),
     ):
         company = db.get(Company, company_id) if company_id else Company()
         if company_id and not company:
             return RedirectResponse(url="/company?message=Company+not+found&status=error", status_code=302)
         company.name, company.fein, company.florida_account_number = name, fein, florida_account_number
-        company.default_tax_year, company.fl_suta_rate = default_tax_year, fl_suta_rate
+        company.default_tax_year = default_tax_year
+        try:
+            company.fl_suta_rate = parse_rate_to_decimal(fl_suta_rate)
+        except ValueError as exc:
+            return RedirectResponse(url=f"/company?message={quote_plus(str(exc))}&status=error", status_code=302)
+
+        if remove_logo:
+            if company.logo_path:
+                (static_root / company.logo_path).unlink(missing_ok=True)
+            company.logo_path = None
+
+        if logo and logo.filename:
+            content_type = (logo.content_type or "").lower()
+            ext = Path(logo.filename).suffix.lower()
+            allowed = {".png", ".jpg", ".jpeg"}
+            allowed_types = {"image/png", "image/jpeg", "image/jpg"}
+            if ext not in allowed or content_type not in allowed_types:
+                return RedirectResponse(url="/company?message=Logo+must+be+PNG+or+JPG&status=error", status_code=302)
+
+            logo.file.seek(0, os.SEEK_END)
+            size = logo.file.tell()
+            logo.file.seek(0)
+            if size > 2 * 1024 * 1024:
+                return RedirectResponse(url="/company?message=Logo+must+be+2MB+or+smaller&status=error", status_code=302)
+
+            if not company_id:
+                db.add(company)
+                db.flush()
+
+            company_upload_dir = upload_root / str(company.id)
+            company_upload_dir.mkdir(parents=True, exist_ok=True)
+            target = company_upload_dir / f"logo{ext}"
+            for existing in company_upload_dir.glob("logo.*"):
+                existing.unlink(missing_ok=True)
+            with target.open("wb") as output:
+                shutil.copyfileobj(logo.file, output)
+            company.logo_path = str(Path("uploads") / str(company.id) / target.name)
+
         if not company_id:
             db.add(company)
         db.commit()
@@ -199,7 +252,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
                 ytd_medicare_wages=sum(_trace_wages(r, "medicare_taxable_wages") for r in ytd_records),
                 ytd_futa_wages=sum(_trace_wages(r, "futa_taxable_wages") for r in ytd_records),
                 ytd_suta_wages=sum(_trace_wages(r, "suta_taxable_wages") for r in ytd_records),
-                company_suta_rate_percent=company.fl_suta_rate,
+                company_suta_rate_decimal=company.fl_suta_rate,
             )
         except TaxConfigError as exc:
             logger.warning("Tax config error for company=%s employee=%s year=%s month=%s: %s", company.id, employee_id, year, month, exc)
@@ -259,29 +312,40 @@ def create_app(database_url: str | None = None) -> FastAPI:
             return RedirectResponse(url=f"/pay-stubs?company_id={company.id if company else ''}&message=No+payroll+record+found&status=error", status_code=302)
         emp = record.employee
         ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month <= month).order_by(MonthlyPayroll.month.asc()).all()
+        ytd_gross = round(sum(r.gross_pay for r in ytd), 2)
+        ytd_taxes_deductions = round(sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in ytd), 2)
+        ytd_net = round(sum(r.net_pay for r in ytd), 2)
+        logo_line = f"Logo: {company.logo_path}" if company.logo_path else "Logo: none"
+
         lines = [
             "Monthly Pay Stub",
+            logo_line,
             f"Company: {company.name}",
             f"Employee: {emp.first_name} {emp.last_name}",
             f"Year/Month: {record.year}/{record.month:02d}",
             f"Pay Date: {record.pay_date.isoformat()}",
             "",
-            f"Earnings - Salary: {emp.monthly_salary:.2f}",
-            f"Earnings - Bonus: {record.bonus:.2f}",
-            f"Earnings - Reimbursements: {record.reimbursements:.2f}",
+            "[Earnings]",
+            f"Salary: {emp.monthly_salary:.2f}",
+            f"Bonus: {record.bonus:.2f}",
+            f"Reimbursements: {record.reimbursements:.2f}",
             f"Gross: {record.gross_pay:.2f}",
             "",
-            f"Deductions - FIT: {record.federal_withholding:.2f}",
-            f"Deductions - Social Security EE: {record.social_security_ee:.2f}",
-            f"Deductions - Medicare EE: {record.medicare_ee:.2f}",
-            f"Deductions - Addl Medicare EE: {record.additional_medicare_ee:.2f}",
-            f"Deductions - Other: {record.deductions:.2f}",
+            "[Taxes & Deductions]",
+            f"FIT: {record.federal_withholding:.2f}",
+            f"Social Security EE: {record.social_security_ee:.2f}",
+            f"Medicare EE: {record.medicare_ee:.2f}",
+            f"Additional Medicare EE: {record.additional_medicare_ee:.2f}",
+            f"Other Deductions: {record.deductions:.2f}",
+            "",
+            "[Net Pay]",
             f"Net: {record.net_pay:.2f}",
             "",
-            "Gross & Net by Month (YTD)",
+            "[YTD Summary]",
+            f"Gross Income YTD: {ytd_gross:.2f}",
+            f"Total Taxes/Deductions YTD: {ytd_taxes_deductions:.2f}",
+            f"Net Income YTD: {ytd_net:.2f}",
         ]
-        for r in ytd:
-            lines.append(f"{r.year}-{r.month:02d} Gross {r.gross_pay:.2f} Net {r.net_pay:.2f}")
         return Response(content=create_pay_stub_pdf_bytes(lines), media_type="application/pdf")
 
     @app.post("/w2/generate/{employee_id}")
