@@ -41,3 +41,8 @@ Generated from stored payroll ledger totals:
 - Form 940 annual:
   - FUTA taxable wages from payroll FUTA ledger and annual wage cap.
 
+
+## Current limitation (documented)
+- Payroll rows are still stored as monthly records (`year` + `month`).
+- For non-monthly employees, the UI now accepts pay date and derives year/month, and FIT is computed using employee `pay_frequency` periods-per-year.
+- This is an incremental step; full native weekly/biweekly period storage is not yet implemented.

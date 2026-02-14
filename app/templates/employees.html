@@ -1,27 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Employees | Payroll Florida{% endblock %}
 {% block content %}
-<h1>Employees{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
-{% if not current_company %}<p>Select a company first.</p>{% else %}
+<h1>Employees - {{ current_company.name }}</h1>
 <form method="post" action="/employees?company_id={{ current_company.id }}">
   <input type="hidden" name="employee_id" value="{{ edit_employee.id if edit_employee else '' }}" />
+
+  <div class="section-title">A) Identity</div>
+  <p class="helper">Enter legal details exactly as they appear on tax documents.</p>
   <div><label>First Name</label><br /><input name="first_name" required value="{{ edit_employee.first_name if edit_employee else '' }}" /></div>
   <div><label>Last Name</label><br /><input name="last_name" required value="{{ edit_employee.last_name if edit_employee else '' }}" /></div>
   <div><label>Address</label><br /><input name="address_line1" required value="{{ edit_employee.address_line1 if edit_employee else '' }}" /></div>
   <div><label>City</label><br /><input name="city" required value="{{ edit_employee.city if edit_employee else '' }}" /></div>
   <div><label>State</label><br /><input name="state" maxlength="2" required value="{{ edit_employee.state if edit_employee else 'FL' }}" /></div>
   <div><label>ZIP</label><br /><input name="zip_code" required value="{{ edit_employee.zip_code if edit_employee else '' }}" /></div>
-  <div><label>SSN</label><br /><input name="ssn" required value="{{ edit_employee.ssn if edit_employee else '' }}" /></div>
+  <div><label>SSN</label><br /><input name="ssn" required pattern="\d{3}-\d{2}-\d{4}" placeholder="123-45-6789" maxlength="11" value="{{ edit_employee.ssn if edit_employee else '' }}" /></div>
+
+  <div class="section-title">B) Pay Settings</div>
+  <p class="helper">Choose how often this employee is paid, then enter the base pay per paycheck.</p>
+  <div>
+    <label>Pay Frequency</label><br />
+    <select name="pay_frequency" title="Weekly = 52 paychecks/year; Biweekly = 26; Semimonthly = 24; Monthly = 12.">
+      {% set pf = edit_employee.pay_frequency if edit_employee else 'monthly' %}
+      <option value="weekly" {% if pf=='weekly' %}selected{% endif %}>Weekly</option>
+      <option value="biweekly" {% if pf=='biweekly' %}selected{% endif %}>Biweekly</option>
+      <option value="semimonthly" {% if pf=='semimonthly' %}selected{% endif %}>Semimonthly</option>
+      <option value="monthly" {% if pf=='monthly' %}selected{% endif %}>Monthly</option>
+      <option value="daily" {% if pf=='daily' %}selected{% endif %}>Daily</option>
+    </select>
+    <div class="helper">Examples: Weekly = 52 paychecks/year; Biweekly = 26; Semimonthly = 24; Monthly = 12.</div>
+  </div>
+  <div><label>Base Pay Amount (per selected frequency)</label><br /><input type="number" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
+
+  <div class="section-title">C) W-4 Withholding</div>
+  <p class="helper">Use values from employee Form W-4 Steps 1, 3 and 4.</p>
   <div><label>Filing Status</label><br /><select name="filing_status"><option value="single">Single</option><option value="married" {% if edit_employee and edit_employee.filing_status=='married' %}selected{% endif %}>Married</option></select></div>
-  <div><label>W-4 Dependents Amount</label><br /><input type="number" step="0.01" name="w4_dependents_amount" value="{{ edit_employee.w4_dependents_amount if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Other Income</label><br /><input type="number" step="0.01" name="w4_other_income" value="{{ edit_employee.w4_other_income if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Deductions</label><br /><input type="number" step="0.01" name="w4_deductions" value="{{ edit_employee.w4_deductions if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Extra Withholding</label><br /><input type="number" step="0.01" name="w4_extra_withholding" value="{{ edit_employee.w4_extra_withholding if edit_employee else '0' }}" /></div>
-  <div><label>Monthly Salary</label><br /><input type="number" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
-  <button type="submit">{{ 'Update Employee' if edit_employee else 'Create Employee' }}</button>
+  <div><label>Step 3: Dependents Amount</label><br /><input type="number" step="0.01" name="w4_dependents_amount" value="{{ edit_employee.w4_dependents_amount if edit_employee else '0' }}" /></div>
+  <div><label>Step 4(a): Other Income</label><br /><input type="number" step="0.01" name="w4_other_income" value="{{ edit_employee.w4_other_income if edit_employee else '0' }}" /></div>
+  <div><label>Step 4(b): Deductions</label><br /><input type="number" step="0.01" name="w4_deductions" value="{{ edit_employee.w4_deductions if edit_employee else '0' }}" /></div>
+  <div><label>Step 4(c): Extra Withholding</label><br /><input type="number" step="0.01" name="w4_extra_withholding" value="{{ edit_employee.w4_extra_withholding if edit_employee else '0' }}" /></div>
+
+  <button class="primary" type="submit">{{ 'Save Employee' if edit_employee else 'Create Employee' }}</button>
 </form>
-<table><thead><tr><th>ID</th><th>Name</th><th>Address</th><th>SSN Last4</th><th>Monthly Salary</th><th>Actions</th></tr></thead><tbody>
-{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
+<table><thead><tr><th>ID</th><th>Name</th><th>Address</th><th>SSN Last4</th><th>Pay Settings</th><th>Actions</th></tr></thead><tbody>
+{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>***-**-{{ e.ssn_last4 }}</td><td>{{ e.pay_frequency|title }} / {{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;" onsubmit="return confirm('Delete this employee?');"><button class="danger" type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
 </tbody></table>
-{% endif %}
+<script>
+  document.querySelector('input[name="ssn"]')?.addEventListener('input', function (e) {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, 9);
+    if (digits.length <= 3) e.target.value = digits;
+    else if (digits.length <= 5) e.target.value = digits.slice(0, 3) + '-' + digits.slice(3);
+    else e.target.value = digits.slice(0, 3) + '-' + digits.slice(3, 5) + '-' + digits.slice(5);
+  });
+</script>
 {% endblock %}

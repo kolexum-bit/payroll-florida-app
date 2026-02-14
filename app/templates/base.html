@@ -5,18 +5,33 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{% block title %}Payroll Florida{% endblock %}</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 2rem; }
-    nav { display:flex; gap:1rem; align-items:center; padding: 0.75rem 1rem; border: 2px solid #004085; border-radius: 10px; background: #f5f9ff; }
-    nav a { text-decoration: none; color: #004085; }
+    :root { --blue:#004085; --blue-bg:#f5f9ff; --gray:#f2f4f7; }
+    body { font-family: Arial, sans-serif; margin: 2rem; color:#1f2937; }
+    nav { display:flex; gap:1rem; align-items:center; padding: 0.75rem 1rem; border: 2px solid var(--blue); border-radius: 10px; background: var(--blue-bg); }
+    nav a { text-decoration: none; color: var(--blue); }
     nav .company-switcher { margin-left:auto; display:flex; align-items:center; gap:0.75rem; font-weight:700; color:#002752; font-size:1.05rem; }
     nav .company-switcher .current-company-text { white-space: nowrap; }
-    nav .company-switcher select { font-size: 1.1rem; padding: 0.55rem 0.9rem; min-width: 300px; border: 2px solid #004085; border-radius: 8px; background: #ffffff; }
+    nav .company-switcher select { font-size: 1.1rem; padding: 0.55rem 0.9rem; min-width: 300px; border: 2px solid var(--blue); border-radius: 8px; background: #ffffff; }
+    .wizard { margin: 1rem 0; border:1px solid #d7e3f4; border-radius:10px; padding:0.85rem; background:#fafcff; }
+    .wizard ol { list-style:none; margin:0; padding:0; display:flex; gap:0.5rem; flex-wrap:wrap; }
+    .wizard li { padding:0.4rem 0.6rem; border-radius:16px; border:1px solid #cbd5e1; background:white; font-size:0.92rem; }
+    .wizard li.active { background:#dbeafe; border-color:#60a5fa; font-weight:700; }
+    .wizard li.locked { color:#6b7280; background:#f3f4f6; }
+    .wizard li a { color:inherit; text-decoration:none; }
+    .progress { margin-top:0.5rem; height:8px; border-radius:8px; background:#e5e7eb; overflow:hidden; }
+    .progress .fill { height:8px; background:#3b82f6; }
     .message.success { background: #d4edda; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
     .message.error { background: #f8d7da; color: #721c24; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
-    form div { margin-bottom: 0.5rem; }
+    form div { margin-bottom: 0.75rem; }
+    .section-title { background:var(--gray); padding:0.5rem 0.65rem; border-radius:6px; font-weight:700; margin:1.1rem 0 0.6rem; }
+    .helper { color:#4b5563; font-size:0.9rem; margin-top:-0.2rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
-    .actions { display: flex; gap: 0.5rem; }
+    th { background:var(--gray); }
+    th, td { border: 1px solid #ddd; padding: 0.65rem; text-align: left; }
+    .actions { display: flex; gap: 0.5rem; align-items:center; }
+    button.primary { background:#0b5ed7; color:white; border:0; border-radius:6px; padding:0.5rem 0.8rem; cursor:pointer; }
+    button.danger { background:#b91c1c; color:white; border:0; border-radius:6px; padding:0.45rem 0.7rem; cursor:pointer; }
+    input, select { padding:0.35rem; min-width: 220px; }
   </style>
 </head>
 <body>
@@ -37,7 +52,20 @@
     </form>
   </nav>
 
-  <hr />
+  <div class="wizard">
+    <ol>
+      {% for step in wizard_steps %}
+      <li class="{% if loop.index == current_step %}active{% elif not step.enabled %}locked{% endif %}">
+        {% if step.enabled %}
+          <a href="{{ step.path }}{% if current_company and step.path != '/company' %}?company_id={{ current_company.id }}{% endif %}">Step {{ loop.index }}: {{ step.name }}</a>
+        {% else %}
+          Step {{ loop.index }}: {{ step.name }}
+        {% endif %}
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="progress"><div class="fill" style="width: {{ (current_step / (wizard_steps|length) * 100)|round(0) }}%"></div></div>
+  </div>
 
   {% if message %}
     <div class="message {{ status }}">{{ message }}</div>

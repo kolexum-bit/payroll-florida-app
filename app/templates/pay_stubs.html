@@ -1,17 +1,16 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Pay Stubs & W-2{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
-{% if current_company %}
+<h1>Pay Stubs & W-2 - {{ current_company.name }}</h1>
 <form method="post" action="/pay-stubs/generate?company_id={{ current_company.id }}">
+<div class="section-title">Generate Pay Stub</div>
 <div><label>Employee</label><select name="employee_id">{% for e in employees %}<option value="{{e.id}}">{{e.first_name}} {{e.last_name}}</option>{% endfor %}</select></div>
 <div><label>Year</label><input type="number" name="year" required/></div><div><label>Month</label><input type="number" name="month" min="1" max="12" required/></div>
-<button type="submit">Generate Monthly Pay Stub PDF</button>
+<button class="primary" type="submit">Create Pay Stub PDF</button>
 </form>
-<h2>W-2</h2>
+<h2 class="section-title">W-2</h2>
 <form method="post" action="/w2/generate-batch?company_id={{ current_company.id }}">
-<div><label>Year</label><input type="number" name="year" required/></div><button type="submit">Batch generate W-2 PDFs</button></form>
+<div><label>Year</label><input type="number" name="year" required/></div><button class="primary" type="submit">Create Batch W-2 PDFs</button></form>
 <table><thead><tr><th>Employee</th><th>Action</th></tr></thead><tbody>
-{% for e in employees %}<tr><td>{{e.first_name}} {{e.last_name}}</td><td><form method="post" action="/w2/generate/{{e.id}}?company_id={{ current_company.id }}"><input type="number" name="year" placeholder="Tax year" required/><button type="submit">Generate W-2 (PDF)</button></form></td></tr>{% endfor %}
+{% for e in employees %}<tr><td>{{e.first_name}} {{e.last_name}}</td><td><form method="post" action="/w2/generate/{{e.id}}?company_id={{ current_company.id }}"><input type="number" name="year" placeholder="Tax year" required/><button class="primary" type="submit">Create W-2 PDF</button></form></td></tr>{% endfor %}
 </tbody></table>
-{% endif %}
 {% endblock %}

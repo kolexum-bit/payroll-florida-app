@@ -33,6 +33,7 @@ def create_employee(client: TestClient, company_id: int, ssn: str, first: str = 
             "w4_other_income": 0,
             "w4_deductions": 0,
             "w4_extra_withholding": 0,
+            "pay_frequency": "monthly",
             "monthly_salary": 5000,
         },
     )

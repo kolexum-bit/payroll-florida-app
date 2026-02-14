@@ -13,6 +13,17 @@ DATA_DIR = PROJECT_ROOT / "data" / "tax"
 class TaxConfigError(Exception):
     pass
 
+PERIODS_PER_YEAR = {
+    "daily": 260,
+    "weekly": 52,
+    "biweekly": 26,
+    "semimonthly": 24,
+    "monthly": 12,
+}
+
+
+def periods_per_year(pay_frequency: str) -> int:
+    return PERIODS_PER_YEAR.get((pay_frequency or "monthly").lower(), 12)
 
 def round2(value: float) -> float:
     return round(value + 1e-9, 2)
@@ -94,11 +105,12 @@ def calculate_monthly_payroll(
     gross = max(0.0, employee.monthly_salary + bonus + reimbursements)
     taxable_wages = max(0.0, gross - deductions)
 
-    annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
+    period_count = periods_per_year(employee.pay_frequency)
+    annualized = taxable_wages * period_count + employee.w4_other_income - employee.w4_deductions
     fit_taxable = max(0.0, annualized - float(fit_cfg["standard_deduction"]))
     fit_brackets = _normalize_brackets(fit_cfg["brackets"])
     fit_annual = max(0.0, _annual_fit_from_brackets(fit_taxable, fit_brackets) - employee.w4_dependents_amount)
-    federal = fit_annual / 12 + employee.w4_extra_withholding
+    federal = fit_annual / period_count + employee.w4_extra_withholding
 
     ss_remaining = max(0.0, ss_cfg["wage_base"] - ytd_ss_wages)
     ss_taxable = min(ss_remaining, taxable_wages)
@@ -127,7 +139,9 @@ def calculate_monthly_payroll(
         "source": tax.get("source"),
         "files": [f"data/tax/{year}/rates.json"],
         "inputs": {
-            "monthly_salary": employee.monthly_salary,
+            "base_pay_amount": employee.monthly_salary,
+            "pay_frequency": employee.pay_frequency,
+            "periods_per_year": period_count,
             "bonus": bonus,
             "reimbursements": reimbursements,
             "deductions": deductions,

@@ -1,20 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>Monthly Payroll{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
-{% if current_company %}
-<form method="post" action="/monthly-payroll?company_id={{ current_company.id }}">
+<h1>Payroll - {{ current_company.name }}</h1>
+<form method="post" action="/monthly-payroll?company_id={{ current_company.id }}" id="payroll-form">
 <input type="hidden" name="record_id" value="{{ edit_record.id if edit_record else '' }}" />
-<div><label>Employee</label><br/><select name="employee_id">{% for e in employees %}<option value="{{ e.id }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}</select></div>
-<div><label>Year</label><input type="number" name="year" value="{{ edit_record.year if edit_record else '' }}" required/></div>
-<div><label>Month</label><input type="number" min="1" max="12" name="month" value="{{ edit_record.month if edit_record else '' }}" required/></div>
-<div><label>Pay Date</label><input type="date" name="pay_date" value="{{ edit_record.pay_date if edit_record else '' }}" required/></div>
+<div><label>Employee</label><br/><select name="employee_id" id="employee_id">
+{% for e in employees %}<option value="{{ e.id }}" data-frequency="{{ e.pay_frequency }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }} ({{ e.pay_frequency|title }})</option>{% endfor %}
+</select></div>
+<div id="period-monthly">
+  <div><label>Year</label><input type="number" name="year" id="year_field" value="{{ edit_record.year if edit_record else current_company.default_tax_year }}" required/></div>
+  <div><label>Month</label><input type="number" min="1" max="12" name="month" id="month_field" value="{{ edit_record.month if edit_record else '' }}" required/></div>
+</div>
+<div id="period-date" style="display:none;">
+  <label>Pay Date</label><input type="date" name="pay_date" id="pay_date" value="{{ edit_record.pay_date if edit_record else '' }}" required/>
+  <div class="helper">For non-monthly employees, year/month are derived from the pay date.</div>
+</div>
 <div><label>Bonus</label><input type="number" step="0.01" name="bonus" value="{{ edit_record.bonus if edit_record else 0 }}"/></div>
 <div><label>Reimbursements</label><input type="number" step="0.01" name="reimbursements" value="{{ edit_record.reimbursements if edit_record else 0 }}"/></div>
 <div><label>Deductions</label><input type="number" step="0.01" name="deductions" value="{{ edit_record.deductions if edit_record else 0 }}"/></div>
-<button type="submit">Save Payroll</button>
+<button class="primary" type="submit">Save Payroll</button>
 </form>
-<table><thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>FIT</th><th>Net</th><th>Actions</th></tr></thead><tbody>
-{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?company_id={{ current_company.id }}&edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete?company_id={{ current_company.id }}"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
+<table><thead><tr><th>Employee</th><th>Period</th><th>Gross</th><th>FIT</th><th>Net</th><th>Actions</th></tr></thead><tbody>
+{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ '%02d'|format(r.month) }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?company_id={{ current_company.id }}&edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete?company_id={{ current_company.id }}" onsubmit="return confirm('Delete this payroll record?');"><button class="danger" type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
 </tbody></table>
-{% else %}<p>Select company first.</p>{% endif %}
+<script>
+(function () {
+  const emp = document.getElementById('employee_id');
+  const monthly = document.getElementById('period-monthly');
+  const byDate = document.getElementById('period-date');
+  const payDate = document.getElementById('pay_date');
+  function sync() {
+    const freq = emp.options[emp.selectedIndex]?.dataset.frequency || 'monthly';
+    if (freq === 'monthly') {
+      monthly.style.display = 'block';
+      byDate.style.display = 'none';
+    } else {
+      monthly.style.display = 'none';
+      byDate.style.display = 'block';
+      if (!payDate.value) payDate.value = new Date().toISOString().slice(0,10);
+    }
+  }
+  emp.addEventListener('change', sync);
+  sync();
+})();
+</script>
 {% endblock %}

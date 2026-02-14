@@ -49,6 +49,7 @@ class Employee(Base):
     w4_other_income: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     w4_deductions: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     w4_extra_withholding: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    pay_frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="monthly")
     monthly_salary: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
 
     company: Mapped[Company] = relationship(back_populates="employees")
