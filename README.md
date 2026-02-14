@@ -35,20 +35,28 @@ The schema is recreated automatically at startup.
 - FICA/FUTA/SUTA rates and wage bases are loaded per year from JSON.
 
 ### Tax data contract
-- `data/tax/{year}/metadata.json` (`source`, `version`, `last_updated`)
+- `data/tax/{year}/metadata.json` (`source`, `version`, `last_updated`, `notes`, `tax_year`, `method`)
 - `data/tax/{year}/rates.json` (FICA/FUTA/SUTA + Medicare additional thresholds)
+- `data/tax/{year}/validation.json` (key IRS invariants used to verify that FIT tables match the intended tax year)
 - `data/tax/{year}/fit/{pay_frequency}/percentage_method.json` where `pay_frequency` is one of:
   - `daily`, `weekly`, `biweekly`, `semimonthly`, `monthly`
 
 ### Annual update workflow
 1. Scaffold a new year: `python tools/import_tax_year.py --year 2026 --from-year 2025`
 2. Update:
-   - `data/tax/2026/metadata.json` with official publication/source info and date.
+   - `data/tax/2026/metadata.json` with official publication/source info/date and set `tax_year` + `method`.
    - `data/tax/2026/rates.json` for SSA/FICA/FUTA/SUTA changes.
-   - `data/tax/2026/fit/*/percentage_method.json` for Pub 15-T tables by filing status.
+   - `data/tax/2026/fit/*/percentage_method.json` for Pub 15-T percentage-method tables by filing status.
+   - `data/tax/2026/validation.json` with year-specific standard deduction and bracket threshold invariants from IRS Pub 15-T.
 3. Set company **Default Tax Year** to the new year in `/company`.
 4. Run `pytest -q` before release.
 
 ## Tests
 Run all tests:
 - `pytest -q`
+
+## Tax data integrity validation
+- The app validates company tax-year data at runtime and surfaces banners in the UI when issues are found.
+- Payroll save is blocked if FIT/metadata/validation checks fail for the selected year and employee pay frequency.
+- Use `GET /health/tax/{year}?pay_frequency=monthly` to troubleshoot validation output.
+- If blocked, update `data/tax/{year}/validation.json` and FIT tables to match IRS Pub 15-T for that year.

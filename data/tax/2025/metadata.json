@@ -2,5 +2,7 @@
   "source": "IRS Pub 15-T percentage method tables + SSA/FICA + FUTA + Florida RT-6",
   "version": "2025.1",
   "last_updated": "2025-01-01",
-  "notes": "FIT tables are organized by pay frequency under fit/{pay_frequency}/percentage_method.json"
+  "notes": "FIT tables are organized by pay frequency under fit/{pay_frequency}/percentage_method.json",
+  "tax_year": 2025,
+  "method": "percentage"
 }

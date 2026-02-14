@@ -21,6 +21,7 @@ from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
 from app.services.payroll import TaxConfigError, calculate_monthly_payroll, tax_year_available
 from app.services.pdf import create_monthly_pay_stub_pdf_bytes, create_pay_stub_pdf_bytes
+from app.services.tax_validation import validate_fit_tables, validate_tax_year_data
 from app.utils.rates import format_rate_percent, parse_rate_to_decimal
 
 logger = logging.getLogger(__name__)
@@ -56,10 +57,12 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def base_ctx(request: Request, db: Session, **extra):
         companies = db.query(Company).order_by(Company.name.asc()).all()
         company = current_company(request, db)
+        tax_validation = validate_tax_year_data(company.default_tax_year) if company else None
         return {
             "request": request,
             "companies": companies,
             "current_company": company,
+            "tax_validation": tax_validation,
             "format_rate_percent": format_rate_percent,
             **extra,
         }
@@ -257,6 +260,15 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if not company or not employee or employee.company_id != company.id:
             return RedirectResponse(url=f"/monthly-payroll?company_id={company.id if company else ''}&message=Employee+outside+company+scope&status=error", status_code=302)
         calc_year = year or company.default_tax_year
+        validation_result = validate_fit_tables(calc_year, employee.pay_frequency)
+        if not validation_result.ok:
+            guide = f"Tax tables for {calc_year} are missing or invalid for {employee.pay_frequency}. Please update data/tax/{calc_year}/validation.json and fit tables."
+            detail = " ".join(validation_result.errors) if validation_result.errors else guide
+            message = quote_plus(f"{guide} Details: {detail}")
+            accepts = request.headers.get("accept", "")
+            if "text/html" in accepts or "*/*" in accepts:
+                return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={message}&status=error", status_code=302)
+            raise HTTPException(status_code=400, detail={"message": guide, "validation": validation_result.to_dict()})
         if not tax_year_available(calc_year):
             missing_msg = f"Tax tables for {calc_year} are missing. Please add /data/tax/{calc_year}/..."
             accepts = request.headers.get("accept", "")
@@ -437,6 +449,11 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if format == "pdf":
             return Response(content=create_pay_stub_pdf_bytes([f"RT6 {year} Q{quarter}", f"Taxable wages: {data['taxable_wages']:.2f}", f"Contributions: {data['contributions_due']:.2f}"]), media_type="application/pdf")
         return _csv_response("rt6.csv", ["wages", "taxable_wages", "contributions_due"], [[data["wages"], data["taxable_wages"], data["contributions_due"]]])
+
+    @app.get("/health/tax/{year}")
+    def tax_health(year: int, pay_frequency: str = "monthly"):
+        result = validate_fit_tables(year, pay_frequency)
+        return JSONResponse(content=result.to_dict())
 
     return app
 

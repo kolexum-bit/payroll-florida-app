@@ -1,0 +1,34 @@
+{
+  "tax_year": 2025,
+  "standard_deduction": {
+    "single_or_married_filing_separately": 14600,
+    "married_filing_jointly": 29200,
+    "head_of_household": 14600
+  },
+  "bracket_thresholds": {
+    "single_or_married_filing_separately": [
+      11600,
+      47150,
+      100525,
+      191950,
+      243725,
+      609350
+    ],
+    "married_filing_jointly": [
+      23200,
+      94300,
+      201050,
+      383900,
+      487450,
+      731200
+    ],
+    "head_of_household": [
+      11600,
+      47150,
+      100525,
+      191950,
+      243725,
+      609350
+    ]
+  }
+}
