@@ -12,16 +12,51 @@
   <div><label>State</label><br /><input name="state" maxlength="2" required value="{{ edit_employee.state if edit_employee else 'FL' }}" /></div>
   <div><label>ZIP</label><br /><input name="zip_code" required value="{{ edit_employee.zip_code if edit_employee else '' }}" /></div>
   <div><label>SSN</label><br /><input name="ssn" required value="{{ edit_employee.ssn if edit_employee else '' }}" /></div>
-  <div><label>Filing Status</label><br /><select name="filing_status"><option value="single">Single</option><option value="married" {% if edit_employee and edit_employee.filing_status=='married' %}selected{% endif %}>Married</option></select></div>
-  <div><label>W-4 Dependents Amount</label><br /><input type="number" step="0.01" name="w4_dependents_amount" value="{{ edit_employee.w4_dependents_amount if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Other Income</label><br /><input type="number" step="0.01" name="w4_other_income" value="{{ edit_employee.w4_other_income if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Deductions</label><br /><input type="number" step="0.01" name="w4_deductions" value="{{ edit_employee.w4_deductions if edit_employee else '0' }}" /></div>
-  <div><label>W-4 Extra Withholding</label><br /><input type="number" step="0.01" name="w4_extra_withholding" value="{{ edit_employee.w4_extra_withholding if edit_employee else '0' }}" /></div>
-  <div><label>Monthly Salary</label><br /><input type="number" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
+
+  <div>
+    <label>Pay Frequency (required)</label><br />
+    <select name="pay_frequency" required>
+      {% for frequency in pay_frequency_options %}
+      <option value="{{ frequency }}" {% if edit_employee and edit_employee.pay_frequency==frequency %}selected{% elif not edit_employee and frequency=='monthly' %}selected{% endif %}>{{ frequency|capitalize }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div>
+    <label>W-4 Filing Status (required)</label><br />
+    <select name="filing_status" required>
+      <option value="single_or_married_filing_separately" {% if edit_employee and edit_employee.filing_status=='single_or_married_filing_separately' %}selected{% elif not edit_employee %}selected{% endif %}>Single or Married Filing Separately</option>
+      <option value="married_filing_jointly" {% if edit_employee and edit_employee.filing_status=='married_filing_jointly' %}selected{% endif %}>Married Filing Jointly</option>
+      <option value="head_of_household" {% if edit_employee and edit_employee.filing_status=='head_of_household' %}selected{% endif %}>Head of Household</option>
+    </select>
+  </div>
+
+  <div>
+    <label>W-4 Dependents Amount (Step 3)</label><br />
+    <small>Annual dependent credit amount from IRS Form W-4, Step 3.</small><br />
+    <input type="number" min="0" step="0.01" name="w4_dependents_amount" value="{{ edit_employee.w4_dependents_amount if edit_employee else '0' }}" required />
+  </div>
+  <div>
+    <label>Other Income (Step 4a)</label><br />
+    <small>Additional annual income amount used for federal withholding.</small><br />
+    <input type="number" min="0" step="0.01" name="w4_other_income" value="{{ edit_employee.w4_other_income if edit_employee else '0' }}" required />
+  </div>
+  <div>
+    <label>Deductions (Step 4b)</label><br />
+    <small>Annual deductions amount from IRS Form W-4, Step 4(b).</small><br />
+    <input type="number" min="0" step="0.01" name="w4_deductions" value="{{ edit_employee.w4_deductions if edit_employee else '0' }}" required />
+  </div>
+  <div>
+    <label>Extra Withholding per paycheck (Step 4c)</label><br />
+    <small>Additional federal tax amount to withhold from each paycheck.</small><br />
+    <input type="number" min="0" step="0.01" name="w4_extra_withholding" value="{{ edit_employee.w4_extra_withholding if edit_employee else '0' }}" required />
+  </div>
+
+  <div><label>Per-Paycheck Gross Amount</label><br /><input type="number" min="0" step="0.01" name="monthly_salary" required value="{{ edit_employee.monthly_salary if edit_employee else '' }}" /></div>
   <button type="submit">{{ 'Update Employee' if edit_employee else 'Create Employee' }}</button>
 </form>
-<table><thead><tr><th>ID</th><th>Name</th><th>Address</th><th>SSN Last4</th><th>Monthly Salary</th><th>Actions</th></tr></thead><tbody>
-{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.address_line1 }}, {{ e.city }}, {{ e.state }} {{ e.zip_code }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No employees yet.</td></tr>{% endfor %}
+<table><thead><tr><th>ID</th><th>Name</th><th>Pay Frequency</th><th>Filing Status</th><th>SSN Last4</th><th>Per-Paycheck Gross</th><th>Actions</th></tr></thead><tbody>
+{% for e in employees %}<tr><td>{{ e.id }}</td><td>{{ e.first_name }} {{ e.last_name }}</td><td>{{ e.pay_frequency }}</td><td>{{ e.filing_status }}</td><td>{{ e.ssn_last4 }}</td><td>{{ e.monthly_salary }}</td><td class="actions"><a href="/employees?company_id={{ current_company.id }}&edit_id={{ e.id }}">Edit</a><form method="post" action="/employees/{{ e.id }}/delete?company_id={{ current_company.id }}" style="display:inline;"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="7">No employees yet.</td></tr>{% endfor %}
 </tbody></table>
 {% endif %}
 {% endblock %}

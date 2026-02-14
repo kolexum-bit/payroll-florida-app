@@ -2,10 +2,13 @@
 {% block content %}
 <h1>Monthly Payroll{% if current_company %} - {{ current_company.name }}{% endif %}</h1>
 {% if current_company %}
+{% if missing_tax_year_banner %}
+<div class="message error">{{ missing_tax_year_banner }}</div>
+{% endif %}
 <form method="post" action="/monthly-payroll?company_id={{ current_company.id }}">
 <input type="hidden" name="record_id" value="{{ edit_record.id if edit_record else '' }}" />
-<div><label>Employee</label><br/><select name="employee_id">{% for e in employees %}<option value="{{ e.id }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }}</option>{% endfor %}</select></div>
-<div><label>Year</label><input type="number" name="year" value="{{ edit_record.year if edit_record else '' }}" required/></div>
+<div><label>Employee</label><br/><select name="employee_id">{% for e in employees %}<option value="{{ e.id }}" {% if edit_record and edit_record.employee_id==e.id %}selected{% endif %}>{{ e.first_name }} {{ e.last_name }} ({{ e.pay_frequency }})</option>{% endfor %}</select></div>
+<div><label>Tax Year</label><input type="number" name="year" value="{{ edit_record.year if edit_record else current_company.default_tax_year }}" required/></div>
 <div><label>Month</label><input type="number" min="1" max="12" name="month" value="{{ edit_record.month if edit_record else '' }}" required/></div>
 <div><label>Pay Date</label><input type="date" name="pay_date" value="{{ edit_record.pay_date if edit_record else '' }}" required/></div>
 <div><label>Bonus</label><input type="number" step="0.01" name="bonus" value="{{ edit_record.bonus if edit_record else 0 }}"/></div>
@@ -14,7 +17,7 @@
 <button type="submit">Save Payroll</button>
 </form>
 <table><thead><tr><th>Employee</th><th>Month</th><th>Gross</th><th>FIT</th><th>Net</th><th>Actions</th></tr></thead><tbody>
-{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }}</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?company_id={{ current_company.id }}&edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete?company_id={{ current_company.id }}"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
+{% for r in records %}<tr><td>{{ r.employee.first_name }} {{ r.employee.last_name }} ({{ r.employee.pay_frequency }})</td><td>{{ r.year }}/{{ r.month }}</td><td>{{ r.gross_pay }}</td><td>{{ r.federal_withholding }}</td><td>{{ r.net_pay }}</td><td class="actions"><a href="/monthly-payroll?company_id={{ current_company.id }}&edit_id={{r.id}}">Edit</a><form method="post" action="/monthly-payroll/{{ r.id }}/delete?company_id={{ current_company.id }}"><button type="submit">Delete</button></form></td></tr>{% else %}<tr><td colspan="6">No records</td></tr>{% endfor %}
 </tbody></table>
 {% else %}<p>Select company first.</p>{% endif %}
 {% endblock %}

@@ -12,16 +12,16 @@ This implementation supports strict multi-company payroll with per-company data 
 - Deletion rule: **cascade delete** company -> employees/payroll.
 
 ## Assumptions and sources
-- Tax year config loaded from `data/tax/{year}/rates.json`.
-- Source metadata stored in tax file (`source` key).
-- FIT uses simplified profile derived from Pub 15-T style inputs (filing status + W-4 fields).
+- Tax year config loaded from `data/tax/{year}/`.
+- Source metadata stored in `metadata.json` (`source`, `version`, `last_updated`).
+- FIT uses Pub 15-T style percentage method tables by pay frequency + filing status.
 
 ## Rounding
 - Monetary values rounded to 2 decimals after each computed line item.
 
 ## Year versioning
-- Calculations load year-specific rates by payroll year.
-- Missing tax file is an error and should be handled by supplying that year config.
+- Calculations load year-specific data by payroll year and employee pay frequency.
+- Missing tax year data is a user-facing validation error (no crash) and payroll save is blocked until `/data/tax/{year}/...` exists.
 
 ## W-2 mapping
 Generated from stored payroll ledger totals:

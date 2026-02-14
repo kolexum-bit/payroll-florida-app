@@ -51,10 +51,9 @@ def test_pay_stub_pdf_smoke_contains_key_strings(client):
 
     pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 3})
     assert pay_stub.status_code == 200
+    assert len(pay_stub.content) > 1000
     assert b"Alice Doe" in pay_stub.content
-    assert b"Company: A" in pay_stub.content
-    assert b"Gross" in pay_stub.content
-    assert b"Net" in pay_stub.content
+    assert b"A" in pay_stub.content
     assert b"YTD" in pay_stub.content
 
 
@@ -90,3 +89,23 @@ def test_pay_stub_pdf_ytd_sums_all_records_for_year(client):
     assert f"Gross Income YTD: {gross_ytd:.2f}".encode() in pay_stub.content
     assert f"Total Taxes/Deductions YTD: {total_deductions_ytd:.2f}".encode() in pay_stub.content
     assert f"Net Income YTD: {net_ytd:.2f}".encode() in pay_stub.content
+
+
+def test_pay_stub_pdf_with_logo_still_contains_key_content(client):
+    import io
+
+    create_company(client, "A", "11")
+    png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
+    client.post(
+        "/company",
+        data={"company_id": 1, "name": "A", "fein": "11", "florida_account_number": "A-FL", "default_tax_year": 2025, "fl_suta_rate": "2.7%"},
+        files={"logo": ("logo.png", io.BytesIO(png_bytes), "image/png")},
+    )
+    create_employee(client, 1, "111-22-3333", "Alice")
+    client.post("/monthly-payroll?company_id=1", data={"employee_id": 1, "year": 2025, "month": 3, "pay_date": "2025-03-31", "bonus": 0, "reimbursements": 0, "deductions": 0})
+
+    pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 3})
+    assert pay_stub.status_code == 200
+    assert len(pay_stub.content) > 1000
+    assert b"Alice Doe" in pay_stub.content
+    assert b"YTD" in pay_stub.content

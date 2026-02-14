@@ -27,7 +27,7 @@ def test_save_payroll_2026_no_500_and_persists(client):
         assert rec.futa_er > 0
         assert rec.suta_er > 0
         assert rec.net_pay > 0
-        assert rec.calculation_trace["files"] == ["data/tax/2026/rates.json"]
+        assert rec.calculation_trace["files"] == ["data/tax/2026/metadata.json", "data/tax/2026/rates.json", "data/tax/2026/fit/monthly/percentage_method.json"]
 
 
 def test_missing_tax_config_returns_friendly_error_and_400(client, monkeypatch):
@@ -41,7 +41,7 @@ def test_missing_tax_config_returns_friendly_error_and_400(client, monkeypatch):
         follow_redirects=True,
     )
     assert html_resp.status_code == 200
-    assert "Missing tax configuration" in html_resp.text
+    assert "Tax tables for 2099 are missing" in html_resp.text
 
     api_resp = client.post(
         "/monthly-payroll?company_id=1",
@@ -49,7 +49,7 @@ def test_missing_tax_config_returns_friendly_error_and_400(client, monkeypatch):
         headers={"accept": "application/json"},
     )
     assert api_resp.status_code == 400
-    assert "Missing tax configuration" in api_resp.text
+    assert "Tax tables for 2099 are missing" in api_resp.text
 
 
 def test_upsert_one_record_per_period(client):
@@ -91,3 +91,69 @@ def test_rt6_941_940_match_saved_ledger_math(client):
 
     r940 = client.get("/reports?company_id=1&report_type=940&year=2025")
     assert "Taxable FUTA Wages: 7000.0" in r940.text
+
+
+def test_fit_changes_when_pay_frequency_changes(client):
+    create_company(client, "Acme", "11", 2.7)
+    client.post(
+        "/employees?company_id=1",
+        data={
+            "first_name": "Weekly",
+            "last_name": "Worker",
+            "address_line1": "1 Main St",
+            "city": "Miami",
+            "state": "FL",
+            "zip_code": "33101",
+            "ssn": "111-22-3333",
+            "pay_frequency": "weekly",
+            "filing_status": "single_or_married_filing_separately",
+            "w4_dependents_amount": 0,
+            "w4_other_income": 0,
+            "w4_deductions": 0,
+            "w4_extra_withholding": 0,
+            "monthly_salary": 2000,
+        },
+    )
+    client.post(
+        "/employees?company_id=1",
+        data={
+            "first_name": "Monthly",
+            "last_name": "Worker",
+            "address_line1": "1 Main St",
+            "city": "Miami",
+            "state": "FL",
+            "zip_code": "33101",
+            "ssn": "111-22-4444",
+            "pay_frequency": "monthly",
+            "filing_status": "single_or_married_filing_separately",
+            "w4_dependents_amount": 0,
+            "w4_other_income": 0,
+            "w4_deductions": 0,
+            "w4_extra_withholding": 0,
+            "monthly_salary": 2000,
+        },
+    )
+
+    client.post("/monthly-payroll?company_id=1", data={"employee_id": 1, "year": 2025, "month": 1, "pay_date": "2025-01-31", "bonus": 0, "reimbursements": 0, "deductions": 0})
+    client.post("/monthly-payroll?company_id=1", data={"employee_id": 2, "year": 2025, "month": 1, "pay_date": "2025-01-31", "bonus": 0, "reimbursements": 0, "deductions": 0})
+
+    with client.app.state.session_factory() as db:
+        weekly = db.query(MonthlyPayroll).filter(MonthlyPayroll.employee_id == 1).one()
+        monthly = db.query(MonthlyPayroll).filter(MonthlyPayroll.employee_id == 2).one()
+        assert weekly.federal_withholding != monthly.federal_withholding
+
+
+def test_missing_default_tax_year_shows_banner_and_blocks_save(client):
+    create_company(client, "Acme", "11", 2.7)
+    create_employee(client, 1, "111-22-3333", "Alice")
+    client.post("/company", data={"company_id": 1, "name": "Acme", "fein": "11", "florida_account_number": "Acme-FL", "default_tax_year": 2099, "fl_suta_rate": "2.7%"})
+
+    page = client.get("/monthly-payroll?company_id=1")
+    assert "Tax tables for 2099 are missing" in page.text
+
+    resp = client.post(
+        "/monthly-payroll?company_id=1",
+        data={"employee_id": 1, "year": 2099, "month": 1, "pay_date": "2099-01-31", "bonus": 0, "reimbursements": 0, "deductions": 0},
+        follow_redirects=True,
+    )
+    assert "Tax tables for 2099 are missing" in resp.text

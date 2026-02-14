@@ -1,0 +1,101 @@
+{
+  "single_or_married_filing_separately": {
+    "standard_deduction": 14600,
+    "brackets": [
+      {
+        "up_to": 11600,
+        "rate": 0.1
+      },
+      {
+        "up_to": 47150,
+        "rate": 0.12
+      },
+      {
+        "up_to": 100525,
+        "rate": 0.22
+      },
+      {
+        "up_to": 191950,
+        "rate": 0.24
+      },
+      {
+        "up_to": 243725,
+        "rate": 0.32
+      },
+      {
+        "up_to": 609350,
+        "rate": 0.35
+      },
+      {
+        "up_to": null,
+        "rate": 0.37
+      }
+    ]
+  },
+  "married_filing_jointly": {
+    "standard_deduction": 29200,
+    "brackets": [
+      {
+        "up_to": 23200,
+        "rate": 0.1
+      },
+      {
+        "up_to": 94300,
+        "rate": 0.12
+      },
+      {
+        "up_to": 201050,
+        "rate": 0.22
+      },
+      {
+        "up_to": 383900,
+        "rate": 0.24
+      },
+      {
+        "up_to": 487450,
+        "rate": 0.32
+      },
+      {
+        "up_to": 731200,
+        "rate": 0.35
+      },
+      {
+        "up_to": null,
+        "rate": 0.37
+      }
+    ]
+  },
+  "head_of_household": {
+    "standard_deduction": 14600,
+    "brackets": [
+      {
+        "up_to": 11600,
+        "rate": 0.1
+      },
+      {
+        "up_to": 47150,
+        "rate": 0.12
+      },
+      {
+        "up_to": 100525,
+        "rate": 0.22
+      },
+      {
+        "up_to": 191950,
+        "rate": 0.24
+      },
+      {
+        "up_to": 243725,
+        "rate": 0.32
+      },
+      {
+        "up_to": 609350,
+        "rate": 0.35
+      },
+      {
+        "up_to": null,
+        "rate": 0.37
+      }
+    ]
+  }
+}

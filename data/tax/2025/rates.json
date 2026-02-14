@@ -1,38 +1,25 @@
 {
   "source": "IRS Pub 15-T percentage method (annualized approximation), SSA/FICA, FUTA, Florida RT-6",
-  "fit": {
-    "single": {
-      "standard_deduction": 14600,
-      "brackets": [
-        {"up_to": 11600, "rate": 0.10},
-        {"up_to": 47150, "rate": 0.12},
-        {"up_to": 100525, "rate": 0.22},
-        {"up_to": 191950, "rate": 0.24},
-        {"up_to": 243725, "rate": 0.32},
-        {"up_to": 609350, "rate": 0.35},
-        {"up_to": null, "rate": 0.37}
-      ]
-    },
-    "married": {
-      "standard_deduction": 29200,
-      "brackets": [
-        {"up_to": 23200, "rate": 0.10},
-        {"up_to": 94300, "rate": 0.12},
-        {"up_to": 201050, "rate": 0.22},
-        {"up_to": 383900, "rate": 0.24},
-        {"up_to": 487450, "rate": 0.32},
-        {"up_to": 731200, "rate": 0.35},
-        {"up_to": null, "rate": 0.37}
-      ]
-    }
+  "social_security": {
+    "employee_rate": 0.062,
+    "employer_rate": 0.062,
+    "wage_base": 168600
   },
-  "social_security": {"employee_rate": 0.062, "employer_rate": 0.062, "wage_base": 168600},
   "medicare": {
     "employee_rate": 0.0145,
     "employer_rate": 0.0145,
     "additional_employee_rate": 0.009,
-    "additional_threshold": {"single": 200000, "married": 250000}
+    "additional_threshold": {
+      "single_or_married_filing_separately": 200000,
+      "married_filing_jointly": 250000,
+      "head_of_household": 200000
+    }
   },
-  "futa": {"employer_rate": 0.006, "wage_base": 7000},
-  "suta": {"wage_base": 7000}
+  "futa": {
+    "employer_rate": 0.006,
+    "wage_base": 7000
+  },
+  "suta": {
+    "wage_base": 7000
+  }
 }
