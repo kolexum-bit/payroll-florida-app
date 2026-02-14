@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import os
 from datetime import date
 from urllib.parse import quote_plus
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -17,6 +18,8 @@ from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
 from app.services.payroll import TaxConfigError, calculate_monthly_payroll
 from app.services.pdf import create_pay_stub_pdf_bytes
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(database_url: str | None = None) -> FastAPI:
@@ -38,6 +41,13 @@ def create_app(database_url: str | None = None) -> FastAPI:
         companies = db.query(Company).order_by(Company.name.asc()).all()
         company = current_company(request, db)
         return {"request": request, "companies": companies, "current_company": company, **extra}
+
+    @app.exception_handler(Exception)
+    async def unhandled_exception_handler(request: Request, exc: Exception):
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        if "text/html" in request.headers.get("accept", ""):
+            return RedirectResponse(url="/company?message=Something+went+wrong.+Please+try+again.&status=error", status_code=302)
+        return JSONResponse(status_code=500, content={"detail": "Internal server error. Please contact support if this persists."})
 
     @app.get("/")
     def root():
@@ -117,10 +127,19 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if employee_id and (not emp or emp.company_id != company.id):
             return RedirectResponse(url=f"/employees?company_id={company.id}&message=Employee+not+found&status=error", status_code=302)
         for k, v in {
-            "first_name": first_name, "last_name": last_name, "address_line1": address_line1, "city": city,
-            "state": state.upper(), "zip_code": zip_code, "ssn": ssn, "filing_status": filing_status,
-            "w4_dependents_amount": w4_dependents_amount, "w4_other_income": w4_other_income,
-            "w4_deductions": w4_deductions, "w4_extra_withholding": w4_extra_withholding, "monthly_salary": monthly_salary,
+            "first_name": first_name,
+            "last_name": last_name,
+            "address_line1": address_line1,
+            "city": city,
+            "state": state.upper(),
+            "zip_code": zip_code,
+            "ssn": ssn,
+            "filing_status": filing_status,
+            "w4_dependents_amount": w4_dependents_amount,
+            "w4_other_income": w4_other_income,
+            "w4_deductions": w4_deductions,
+            "w4_extra_withholding": w4_extra_withholding,
+            "monthly_salary": monthly_salary,
         }.items():
             setattr(emp, k, v)
         if not employee_id:
@@ -167,8 +186,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
         ).all()
 
         def _trace_wages(record: MonthlyPayroll, key: str) -> float:
-            trace = record.calculation_trace or {}
-            return float(trace.get("steps", {}).get(key, 0.0))
+            return float((record.calculation_trace or {}).get("steps", {}).get(key, 0.0))
 
         try:
             result = calculate_monthly_payroll(
@@ -184,6 +202,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
                 company_suta_rate_percent=company.fl_suta_rate,
             )
         except TaxConfigError as exc:
+            logger.warning("Tax config error for company=%s employee=%s year=%s month=%s: %s", company.id, employee_id, year, month, exc)
             message = quote_plus(str(exc))
             accepts = request.headers.get("accept", "")
             if "text/html" in accepts or "*/*" in accepts:
@@ -239,8 +258,28 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if not company or not record:
             return RedirectResponse(url=f"/pay-stubs?company_id={company.id if company else ''}&message=No+payroll+record+found&status=error", status_code=302)
         emp = record.employee
-        ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month <= month).all()
-        lines = ["Monthly Pay Stub", f"Company: {company.name}", f"Employee: {emp.first_name} {emp.last_name}", f"Year/Month: {record.year}/{record.month}", f"Pay Date: {record.pay_date.isoformat()}", f"Gross: {record.gross_pay:.2f}", f"Net Pay: {record.net_pay:.2f}", "Gross & Net by Month (YTD)"]
+        ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month <= month).order_by(MonthlyPayroll.month.asc()).all()
+        lines = [
+            "Monthly Pay Stub",
+            f"Company: {company.name}",
+            f"Employee: {emp.first_name} {emp.last_name}",
+            f"Year/Month: {record.year}/{record.month:02d}",
+            f"Pay Date: {record.pay_date.isoformat()}",
+            "",
+            f"Earnings - Salary: {emp.monthly_salary:.2f}",
+            f"Earnings - Bonus: {record.bonus:.2f}",
+            f"Earnings - Reimbursements: {record.reimbursements:.2f}",
+            f"Gross: {record.gross_pay:.2f}",
+            "",
+            f"Deductions - FIT: {record.federal_withholding:.2f}",
+            f"Deductions - Social Security EE: {record.social_security_ee:.2f}",
+            f"Deductions - Medicare EE: {record.medicare_ee:.2f}",
+            f"Deductions - Addl Medicare EE: {record.additional_medicare_ee:.2f}",
+            f"Deductions - Other: {record.deductions:.2f}",
+            f"Net: {record.net_pay:.2f}",
+            "",
+            "Gross & Net by Month (YTD)",
+        ]
         for r in ytd:
             lines.append(f"{r.year}-{r.month:02d} Gross {r.gross_pay:.2f} Net {r.net_pay:.2f}")
         return Response(content=create_pay_stub_pdf_bytes(lines), media_type="application/pdf")
@@ -298,17 +337,17 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if report_type == "941":
             data = form941_summary(db, company.id, year, quarter)
             if format == "pdf":
-                return Response(content=create_pay_stub_pdf_bytes([f"Form 941 {year} Q{quarter}", f"Total tax: {data['total_tax']:.2f}"]), media_type="application/pdf")
-            return _csv_response("form941.csv", ["wages", "federal_withholding", "social_security_tax", "medicare_tax", "total_tax"], [[data["wages"], data["federal_withholding"], data["social_security_tax"], data["medicare_tax"], data["total_tax"]]])
+                return Response(content=create_pay_stub_pdf_bytes([f"Form 941 {year} Q{quarter}", f"FIT: {data['federal_withholding']:.2f}", f"SS tax: {data['social_security_tax']:.2f}", f"Medicare tax: {data['medicare_tax']:.2f}", f"Additional Medicare EE: {data['additional_medicare_ee']:.2f}", f"Total tax: {data['total_tax']:.2f}"]), media_type="application/pdf")
+            return _csv_response("form941.csv", ["wages", "federal_withholding", "social_security_wages", "social_security_tax", "medicare_wages", "medicare_tax", "additional_medicare_ee", "total_tax"], [[data["wages"], data["federal_withholding"], data["social_security_wages"], data["social_security_tax"], data["medicare_wages"], data["medicare_tax"], data["additional_medicare_ee"], data["total_tax"]]])
         if report_type == "940":
             data = form940_summary(db, company.id, year)
             if format == "pdf":
-                return Response(content=create_pay_stub_pdf_bytes([f"Form 940 {year}", f"FUTA Tax: {data['futa_tax']:.2f}"]), media_type="application/pdf")
-            return _csv_response("form940.csv", ["wages", "futa_tax"], [[data["wages"], data["futa_tax"]]])
+                return Response(content=create_pay_stub_pdf_bytes([f"Form 940 {year}", f"Total wages: {data['wages']:.2f}", f"Taxable FUTA wages: {data['futa_taxable_wages']:.2f}", f"FUTA Tax: {data['futa_tax']:.2f}"]), media_type="application/pdf")
+            return _csv_response("form940.csv", ["wages", "futa_taxable_wages", "futa_tax"], [[data["wages"], data["futa_taxable_wages"], data["futa_tax"]]])
         data = rt6_summary(db, company.id, year, quarter, company.fl_suta_rate)
         if format == "pdf":
-            return Response(content=create_pay_stub_pdf_bytes([f"RT6 {year} Q{quarter}", f"Contributions: {data['contributions_due']:.2f}"]), media_type="application/pdf")
-        return _csv_response("rt6.csv", ["taxable_wages", "contributions_due"], [[data["taxable_wages"], data["contributions_due"]]])
+            return Response(content=create_pay_stub_pdf_bytes([f"RT6 {year} Q{quarter}", f"Taxable wages: {data['taxable_wages']:.2f}", f"Contributions: {data['contributions_due']:.2f}"]), media_type="application/pdf")
+        return _csv_response("rt6.csv", ["wages", "taxable_wages", "contributions_due"], [[data["wages"], data["taxable_wages"], data["contributions_due"]]])
 
     return app
 

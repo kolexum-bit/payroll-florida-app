@@ -6,14 +6,15 @@ def _escape(value: str) -> str:
 
 
 def create_pay_stub_pdf_bytes(lines: list[str]) -> bytes:
-    y = 760
     commands = ["BT", "/F1 12 Tf"]
+    y = 760
     for line in lines:
-        commands.append(f"72 {y} Td ({_escape(line)}) Tj")
-        commands.append("0 -18 Td")
+        commands.append(f"1 0 0 1 72 {y} Tm ({_escape(line)}) Tj")
         y -= 18
+        if y < 40:
+            break
     commands.append("ET")
-    stream = "\n".join(commands).encode("latin-1")
+    stream = "\n".join(commands).encode("latin-1", errors="replace")
 
     objs: list[bytes] = []
     objs.append(b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n")
@@ -35,8 +36,6 @@ def create_pay_stub_pdf_bytes(lines: list[str]) -> bytes:
     for off in offsets[1:]:
         out.extend(f"{off:010d} 00000 n \n".encode("latin-1"))
     out.extend(
-        f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n".encode(
-            "latin-1"
-        )
+        f"trailer << /Size {len(offsets)} /Root 1 0 R >>\nstartxref\n{xref_start}\n%%EOF\n".encode("latin-1")
     )
     return bytes(out)

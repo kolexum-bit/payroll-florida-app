@@ -1,5 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
+<div class="reports-nav">
+  {% if current_company %}
+  <a href="/reports?company_id={{ current_company.id }}&report_type=rt6&year={{ year }}&quarter={{ quarter }}">RT-6</a> |
+  <a href="/reports?company_id={{ current_company.id }}&report_type=941&year={{ year }}&quarter={{ quarter }}">Form 941</a> |
+  <a href="/reports?company_id={{ current_company.id }}&report_type=940&year={{ year }}">Form 940</a>
+  {% endif %}
+</div>
 <h1>RT-6 Quarterly Summary</h1>
 <form method="get" action="/reports">
 <input type="hidden" name="report_type" value="rt6" />{% if current_company %}<input type="hidden" name="company_id" value="{{ current_company.id }}" />{% endif %}
