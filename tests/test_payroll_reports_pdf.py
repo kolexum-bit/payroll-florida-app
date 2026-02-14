@@ -18,7 +18,26 @@ def test_rollups_and_company_separation(client):
     rt6_b = client.get("/reports?company_id=2&report_type=rt6&year=2025&quarter=1")
     assert rt6_a.status_code == 200
     assert rt6_b.status_code == 200
+    assert "SPEC Mapping" in rt6_a.text
     assert rt6_a.text != rt6_b.text
+
+
+def test_941_940_reports_show_non_zero_totals(client):
+    create_company(client, "A", "11")
+    create_employee(client, 1, "111-22-3333", "Alice")
+    _seed_payroll(client, 1, 1)
+
+    r941 = client.get("/reports?company_id=1&report_type=941&year=2025&quarter=1")
+    assert r941.status_code == 200
+    assert "Form 941 Quarterly Summary" in r941.text
+    assert "Total Tax:" in r941.text
+    assert "Total Tax: 0" not in r941.text
+
+    r940 = client.get("/reports?company_id=1&report_type=940&year=2025")
+    assert r940.status_code == 200
+    assert "Form 940 Annual FUTA Summary" in r940.text
+    assert "FUTA Tax:" in r940.text
+    assert "SPEC Mapping" in r940.text
 
 
 def test_pay_stub_and_w2_pdf_smoke(client):

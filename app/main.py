@@ -6,7 +6,7 @@ import os
 from datetime import date
 from urllib.parse import quote_plus
 
-from fastapi import Depends, FastAPI, Form, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import IntegrityError
@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.database import create_session_factory, get_db
 from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
-from app.services.payroll import calculate_monthly_payroll
+from app.services.payroll import TaxConfigError, calculate_monthly_payroll
 from app.services.pdf import create_pay_stub_pdf_bytes
 
 
@@ -23,6 +23,7 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="Payroll Florida App")
     templates = Jinja2Templates(directory="app/templates")
     session_factory = create_session_factory(database_url or os.getenv("DATABASE_URL", "sqlite:///./payroll.db"))
+    app.state.session_factory = session_factory
 
     def db_dependency():
         yield from get_db(session_factory)
@@ -158,31 +159,61 @@ def create_app(database_url: str | None = None) -> FastAPI:
         if not company or not employee or employee.company_id != company.id:
             return RedirectResponse(url=f"/monthly-payroll?company_id={company.id if company else ''}&message=Employee+outside+company+scope&status=error", status_code=302)
 
-        ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month < month)
-        ytd_records = ytd.all()
-        result = calculate_monthly_payroll(
-            employee=employee,
-            year=year,
-            bonus=bonus,
-            reimbursements=reimbursements,
-            deductions=deductions,
-            ytd_ss_wages=sum(r.social_security_ee / 0.062 if r.social_security_ee else 0 for r in ytd_records),
-            ytd_medicare_wages=sum(r.medicare_ee / 0.0145 if r.medicare_ee else 0 for r in ytd_records),
-            ytd_futa_wages=sum(r.futa_er / 0.006 if r.futa_er else 0 for r in ytd_records),
-            ytd_suta_wages=sum(r.suta_er / (company.fl_suta_rate / 100) if r.suta_er and company.fl_suta_rate else 0 for r in ytd_records),
-            company_suta_rate_percent=company.fl_suta_rate,
-        )
-        rec = db.get(MonthlyPayroll, record_id) if record_id else MonthlyPayroll(company_id=company.id, employee_id=employee_id)
+        ytd_records = db.query(MonthlyPayroll).filter(
+            MonthlyPayroll.company_id == company.id,
+            MonthlyPayroll.employee_id == employee_id,
+            MonthlyPayroll.year == year,
+            MonthlyPayroll.month < month,
+        ).all()
+
+        def _trace_wages(record: MonthlyPayroll, key: str) -> float:
+            trace = record.calculation_trace or {}
+            return float(trace.get("steps", {}).get(key, 0.0))
+
+        try:
+            result = calculate_monthly_payroll(
+                employee=employee,
+                year=year,
+                bonus=bonus,
+                reimbursements=reimbursements,
+                deductions=deductions,
+                ytd_ss_wages=sum(_trace_wages(r, "ss_taxable_wages") for r in ytd_records),
+                ytd_medicare_wages=sum(_trace_wages(r, "medicare_taxable_wages") for r in ytd_records),
+                ytd_futa_wages=sum(_trace_wages(r, "futa_taxable_wages") for r in ytd_records),
+                ytd_suta_wages=sum(_trace_wages(r, "suta_taxable_wages") for r in ytd_records),
+                company_suta_rate_percent=company.fl_suta_rate,
+            )
+        except TaxConfigError as exc:
+            message = quote_plus(str(exc))
+            accepts = request.headers.get("accept", "")
+            if "text/html" in accepts or "*/*" in accepts:
+                return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={message}&status=error", status_code=302)
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        existing = db.query(MonthlyPayroll).filter(
+            MonthlyPayroll.company_id == company.id,
+            MonthlyPayroll.employee_id == employee_id,
+            MonthlyPayroll.year == year,
+            MonthlyPayroll.month == month,
+        ).first()
+
+        rec = db.get(MonthlyPayroll, record_id) if record_id else existing
         if record_id and (not rec or rec.company_id != company.id):
             return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message=Payroll+record+not+found&status=error", status_code=302)
+        if not rec:
+            rec = MonthlyPayroll(company_id=company.id, employee_id=employee_id)
+            db.add(rec)
         rec.company_id, rec.employee_id, rec.year, rec.month, rec.pay_date = company.id, employee_id, year, month, pay_date
         rec.bonus, rec.reimbursements, rec.deductions = bonus, reimbursements, deductions
         for key, value in result.items():
             setattr(rec, key, value)
-        if not record_id:
-            db.add(rec)
-        db.commit()
-        return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={'Payroll+updated' if record_id else 'Payroll+created'}&status=success", status_code=302)
+
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message=Duplicate+payroll+period+for+employee&status=error", status_code=302)
+        return RedirectResponse(url=f"/monthly-payroll?company_id={company.id}&message={'Payroll+updated' if existing or record_id else 'Payroll+created'}&status=success", status_code=302)
 
     @app.post("/monthly-payroll/{record_id}/delete")
     def delete_payroll(request: Request, record_id: int, db: Session = Depends(db_dependency)):

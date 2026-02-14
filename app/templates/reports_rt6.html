@@ -5,6 +5,8 @@
 <input type="hidden" name="report_type" value="rt6" />{% if current_company %}<input type="hidden" name="company_id" value="{{ current_company.id }}" />{% endif %}
 <div><label>Year</label><input type="number" name="year" value="{{ year }}"/></div><div><label>Quarter</label><input type="number" min="1" max="4" name="quarter" value="{{ quarter }}"/></div><button>Load</button>
 </form>
-<p>Taxable Wages: {{ report_data.taxable_wages }}</p><p>Contributions Due: {{ report_data.contributions_due }}</p>
+<p>Taxable Wages: {{ report_data.taxable_wages }}</p>
+<p>Contributions Due: {{ report_data.contributions_due }}</p>
+<h3>SPEC Mapping</h3><ul>{% for line, desc in report_data.line_mapping.items() %}<li><strong>{{ line }}</strong>: {{ desc }}</li>{% endfor %}</ul>
 <p><a href="/reports/export/rt6?company_id={{ current_company.id }}&year={{ year }}&quarter={{ quarter }}&format=csv">CSV</a></p>
 {% endblock %}

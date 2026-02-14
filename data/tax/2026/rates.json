@@ -1,10 +1,10 @@
 {
   "source": "IRS Pub 15-T (simplified dev profile), SSA/FICA, FUTA, Florida RT-6",
   "fit": {
-    "single": {"standard_deduction": 14600, "flat_rate": 0.10},
-    "married": {"standard_deduction": 29200, "flat_rate": 0.10}
+    "single": {"standard_deduction": 15000, "flat_rate": 0.10},
+    "married": {"standard_deduction": 30000, "flat_rate": 0.10}
   },
-  "social_security": {"employee_rate": 0.062, "employer_rate": 0.062, "wage_base": 168600},
+  "social_security": {"employee_rate": 0.062, "employer_rate": 0.062, "wage_base": 176100},
   "medicare": {
     "employee_rate": 0.0145,
     "employer_rate": 0.0145,
