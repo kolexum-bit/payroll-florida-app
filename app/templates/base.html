@@ -13,6 +13,9 @@
     nav .company-switcher select { font-size: 1.1rem; padding: 0.55rem 0.9rem; min-width: 300px; border: 2px solid #004085; border-radius: 8px; background: #ffffff; }
     .message.success { background: #d4edda; color: #155724; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
     .message.error { background: #f8d7da; color: #721c24; padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; }
+    .banner { padding: 0.75rem; border-radius: 4px; margin-bottom: 1rem; border: 1px solid transparent; }
+    .banner.error { background: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+    .banner.warning { background: #fff3cd; color: #856404; border-color: #ffeeba; }
     form div { margin-bottom: 0.5rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
     th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
@@ -41,6 +44,14 @@
 
   {% if message %}
     <div class="message {{ status }}">{{ message }}</div>
+  {% endif %}
+
+  {% if current_company and tax_validation %}
+    {% if tax_validation.errors %}
+      <div class="banner error">Tax data for {{ current_company.default_tax_year }} is missing or does not match IRS values. Payroll calculations are blocked until fixed.</div>
+    {% elif tax_validation.warnings %}
+      <div class="banner warning">Tax data for {{ current_company.default_tax_year }} has warnings. Please review tax metadata before running payroll.</div>
+    {% endif %}
   {% endif %}
 
   {% block content %}{% endblock %}

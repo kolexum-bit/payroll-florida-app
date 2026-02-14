@@ -13,15 +13,18 @@ This implementation supports strict multi-company payroll with per-company data 
 
 ## Assumptions and sources
 - Tax year config loaded from `data/tax/{year}/`.
-- Source metadata stored in `metadata.json` (`source`, `version`, `last_updated`).
+- Source metadata stored in `metadata.json` (`source`, `version`, `last_updated`, `notes`, `tax_year`, `method`).
 - FIT uses Pub 15-T style percentage method tables by pay frequency + filing status.
+- `validation.json` stores key year invariants (standard deductions + bracket thresholds) used to detect wrong-year tables.
 
 ## Rounding
 - Monetary values rounded to 2 decimals after each computed line item.
 
 ## Year versioning
 - Calculations load year-specific data by payroll year and employee pay frequency.
-- Missing tax year data is a user-facing validation error (no crash) and payroll save is blocked until `/data/tax/{year}/...` exists.
+- Missing/mismatched tax year data is a user-facing validation error (no crash).
+- Payroll save is blocked when metadata, required FIT files, or Pub 15-T invariants do not validate for the selected year/frequency.
+- Troubleshooting endpoint: `/health/tax/{year}` returns structured validation results.
 
 ## W-2 mapping
 Generated from stored payroll ledger totals:
