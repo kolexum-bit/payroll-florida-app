@@ -18,6 +18,13 @@ def round2(value: float) -> float:
     return round(value + 1e-9, 2)
 
 
+def _validate_fit_config(fit_cfg: dict, year: int, status: str) -> None:
+    if "standard_deduction" not in fit_cfg:
+        raise TaxConfigError(f"Missing FIT standard_deduction for {status} in {year}")
+    if "brackets" not in fit_cfg or not isinstance(fit_cfg["brackets"], list):
+        raise TaxConfigError(f"Missing FIT brackets for {status} in {year}")
+
+
 def load_tax_year_data(year: int) -> dict:
     path = DATA_DIR / str(year) / "rates.json"
     try:
@@ -33,6 +40,34 @@ def load_tax_year_data(year: int) -> dict:
     return data
 
 
+def _annual_fit_from_brackets(taxable_income: float, brackets: list[dict]) -> float:
+    tax = 0.0
+    remaining = taxable_income
+    for bracket in brackets:
+        upper = bracket.get("up_to")
+        rate = float(bracket["rate"])
+        if upper is None:
+            tax += max(0.0, remaining) * rate
+            break
+        width = max(0.0, float(upper) - bracket.get("_lower", 0.0))
+        taxed = min(max(0.0, remaining), width)
+        tax += taxed * rate
+        remaining -= taxed
+        if remaining <= 0:
+            break
+    return max(0.0, tax)
+
+
+def _normalize_brackets(brackets: list[dict]) -> list[dict]:
+    lower = 0.0
+    normalized: list[dict] = []
+    for bracket in brackets:
+        item = {"rate": float(bracket["rate"]), "up_to": bracket.get("up_to"), "_lower": lower}
+        if item["up_to"] is not None:
+            lower = float(item["up_to"])
+        normalized.append(item)
+    return normalized
+
 
 def calculate_monthly_payroll(
     employee: Employee,
@@ -47,7 +82,10 @@ def calculate_monthly_payroll(
     company_suta_rate_percent: float,
 ) -> dict:
     tax = load_tax_year_data(year)
-    fit_cfg = tax["fit"][employee.filing_status]
+    fit_cfg = tax["fit"].get(employee.filing_status)
+    if not fit_cfg:
+        raise TaxConfigError(f"Unsupported filing status '{employee.filing_status}' for {year}")
+    _validate_fit_config(fit_cfg, year, employee.filing_status)
     ss_cfg = tax["social_security"]
     medicare_cfg = tax["medicare"]
     futa_cfg = tax["futa"]
@@ -57,8 +95,9 @@ def calculate_monthly_payroll(
     taxable_wages = max(0.0, gross - deductions)
 
     annualized = taxable_wages * 12 + employee.w4_other_income - employee.w4_deductions
-    fit_taxable = max(0.0, annualized - fit_cfg["standard_deduction"])
-    fit_annual = max(0.0, fit_taxable * fit_cfg["flat_rate"] - employee.w4_dependents_amount)
+    fit_taxable = max(0.0, annualized - float(fit_cfg["standard_deduction"]))
+    fit_brackets = _normalize_brackets(fit_cfg["brackets"])
+    fit_annual = max(0.0, _annual_fit_from_brackets(fit_taxable, fit_brackets) - employee.w4_dependents_amount)
     federal = fit_annual / 12 + employee.w4_extra_withholding
 
     ss_remaining = max(0.0, ss_cfg["wage_base"] - ytd_ss_wages)
@@ -111,6 +150,9 @@ def calculate_monthly_payroll(
             "taxable_wages": taxable_wages,
             "fit_annualized_wages": annualized,
             "fit_taxable_annual_wages": fit_taxable,
+            "fit_annual_tax_before_credits": _annual_fit_from_brackets(fit_taxable, fit_brackets),
+            "fit_annual_tax_after_credits": fit_annual,
+            "fit_monthly_withholding": federal,
             "ss_taxable_wages": ss_taxable,
             "medicare_taxable_wages": taxable_wages,
             "additional_medicare_taxable_wages": addl_base,
@@ -120,7 +162,7 @@ def calculate_monthly_payroll(
             "futa_wage_base_remaining": futa_remaining,
             "suta_wage_base_remaining": suta_remaining,
         },
-        "rounding": "Rounded to 2 decimals after each line item",
+        "rounding": "Rounded to 2 decimals after each output line item",
     }
 
     return {

@@ -1,8 +1,30 @@
 {
-  "source": "IRS Pub 15-T (simplified dev profile), SSA/FICA, FUTA, Florida RT-6",
+  "source": "IRS Pub 15-T percentage method (annualized approximation), SSA/FICA, FUTA, Florida RT-6",
   "fit": {
-    "single": {"standard_deduction": 14600, "flat_rate": 0.10},
-    "married": {"standard_deduction": 29200, "flat_rate": 0.10}
+    "single": {
+      "standard_deduction": 14600,
+      "brackets": [
+        {"up_to": 11600, "rate": 0.10},
+        {"up_to": 47150, "rate": 0.12},
+        {"up_to": 100525, "rate": 0.22},
+        {"up_to": 191950, "rate": 0.24},
+        {"up_to": 243725, "rate": 0.32},
+        {"up_to": 609350, "rate": 0.35},
+        {"up_to": null, "rate": 0.37}
+      ]
+    },
+    "married": {
+      "standard_deduction": 29200,
+      "brackets": [
+        {"up_to": 23200, "rate": 0.10},
+        {"up_to": 94300, "rate": 0.12},
+        {"up_to": 201050, "rate": 0.22},
+        {"up_to": 383900, "rate": 0.24},
+        {"up_to": 487450, "rate": 0.32},
+        {"up_to": 731200, "rate": 0.35},
+        {"up_to": null, "rate": 0.37}
+      ]
+    }
   },
   "social_security": {"employee_rate": 0.062, "employer_rate": 0.062, "wage_base": 168600},
   "medicare": {
