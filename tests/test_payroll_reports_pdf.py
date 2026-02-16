@@ -51,10 +51,12 @@ def test_pay_stub_pdf_smoke_contains_key_strings(client):
 
     pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 3})
     assert pay_stub.status_code == 200
+    assert pay_stub.headers["content-disposition"] == "attachment; filename=\"paystub_doe_2025_03.pdf\""
     assert len(pay_stub.content) > 1000
     assert b"Alice Doe" in pay_stub.content
-    assert b"A" in pay_stub.content
-    assert b"YTD" in pay_stub.content
+    assert b"SSN: ***-**-3333" in pay_stub.content
+    assert b"YTD SUMMARY" in pay_stub.content
+    assert b"State Income Tax" not in pay_stub.content
 
 
 def test_w2_pdf_smoke(client):
@@ -76,9 +78,9 @@ def test_pay_stub_pdf_ytd_sums_all_records_for_year(client):
 
     pay_stub = client.post("/pay-stubs/generate?company_id=1", data={"employee_id": 1, "year": 2025, "month": 2})
     assert pay_stub.status_code == 200
-    assert b"Gross Income YTD" in pay_stub.content
-    assert b"Total Taxes/Deductions YTD" in pay_stub.content
-    assert b"Net Income YTD" in pay_stub.content
+    assert b"YTD Gross" in pay_stub.content
+    assert b"YTD Total Deductions" in pay_stub.content
+    assert b"YTD Net" in pay_stub.content
 
     with client.app.state.session_factory() as db:
         rows = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == 1, MonthlyPayroll.employee_id == 1, MonthlyPayroll.year == 2025, MonthlyPayroll.month <= 2).all()
@@ -86,9 +88,9 @@ def test_pay_stub_pdf_ytd_sums_all_records_for_year(client):
         total_deductions_ytd = sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in rows)
         net_ytd = sum(r.net_pay for r in rows)
 
-    assert f"Gross Income YTD: {gross_ytd:.2f}".encode() in pay_stub.content
-    assert f"Total Taxes/Deductions YTD: {total_deductions_ytd:.2f}".encode() in pay_stub.content
-    assert f"Net Income YTD: {net_ytd:.2f}".encode() in pay_stub.content
+    assert f"YTD Gross: ${gross_ytd:,.2f}".encode() in pay_stub.content
+    assert f"YTD Total Deductions: ${total_deductions_ytd:,.2f}".encode() in pay_stub.content
+    assert f"YTD Net: ${net_ytd:,.2f}".encode() in pay_stub.content
 
 
 def test_pay_stub_pdf_with_logo_still_contains_key_content(client):
@@ -108,4 +110,4 @@ def test_pay_stub_pdf_with_logo_still_contains_key_content(client):
     assert pay_stub.status_code == 200
     assert len(pay_stub.content) > 1000
     assert b"Alice Doe" in pay_stub.content
-    assert b"YTD" in pay_stub.content
+    assert b"YTD SUMMARY" in pay_stub.content

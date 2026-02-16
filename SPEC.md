@@ -44,3 +44,19 @@ Generated from stored payroll ledger totals:
 - Form 940 annual:
   - FUTA taxable wages from payroll FUTA ledger and annual wage cap.
 
+
+## Pay Stub PDF fields (Florida)
+- Generated from stored company, employee, and monthly payroll ledger values.
+- Header shows company name, optional address line, `United States`, pay stub month/year, pay date, and optional logo image.
+- Employee section shows: name, employee ID, address, masked SSN format `***-**-1234`, filing status label, and payroll period (defaults to `Monthly` when frequency is unavailable).
+- Earnings section shows regular pay, plus bonus/reimbursements when present.
+- Deductions section is Florida-specific and includes only:
+  - Federal Income Tax (FIT)
+  - Social Security (Employee)
+  - Medicare (Employee)
+  - Additional Medicare (Employee) when applicable
+  - Other Deductions when present
+- **No State Income Tax line is shown** because Florida has no state income tax.
+- YTD summary is based on stored payroll history for the employee/year up to the selected month:
+  - `ytd_gross`, `ytd_net`, `ytd_fit`, `ytd_ss`, `ytd_medicare`, `ytd_addl_medicare`, `ytd_other_deductions`
+  - `ytd_total_deductions = ytd_fit + ytd_ss + ytd_medicare + ytd_addl_medicare + ytd_other_deductions`

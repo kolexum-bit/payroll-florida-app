@@ -20,7 +20,8 @@ from app.database import create_session_factory, get_db
 from app.models import Company, Employee, MonthlyPayroll
 from app.reports.rollups import employee_w2_totals, form940_summary, form941_summary, rt6_summary
 from app.services.payroll import TaxConfigError, calculate_monthly_payroll, tax_year_available
-from app.services.pdf import create_monthly_pay_stub_pdf_bytes, create_pay_stub_pdf_bytes
+from app.reports.paystub_pdf import generate_paystub_pdf
+from app.services.pdf import create_pay_stub_pdf_bytes
 from app.services.tax_validation import validate_fit_tables, validate_tax_year_data
 from app.utils.rates import format_rate_percent, parse_rate_to_decimal
 
@@ -358,32 +359,35 @@ def create_app(database_url: str | None = None) -> FastAPI:
             return RedirectResponse(url=f"/pay-stubs?company_id={company.id if company else ''}&message=No+payroll+record+found&status=error", status_code=302)
         emp = record.employee
         ytd = db.query(MonthlyPayroll).filter(MonthlyPayroll.company_id == company.id, MonthlyPayroll.employee_id == employee_id, MonthlyPayroll.year == year, MonthlyPayroll.month <= month).order_by(MonthlyPayroll.month.asc()).all()
-        ytd_gross = round(sum(r.gross_pay for r in ytd), 2)
-        ytd_taxes_deductions = round(sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in ytd), 2)
-        ytd_net = round(sum(r.net_pay for r in ytd), 2)
-        logo_abs_path = str((static_root / company.logo_path).resolve()) if company.logo_path else None
-
-        pdf_bytes = create_monthly_pay_stub_pdf_bytes(
-            company_name=company.name,
-            employee_name=f"{emp.first_name} {emp.last_name}",
-            pay_period=f"{record.year}/{record.month:02d}",
-            pay_date=record.pay_date.isoformat(),
-            salary=emp.monthly_salary,
-            bonus=record.bonus,
-            reimbursements=record.reimbursements,
-            gross=record.gross_pay,
-            fit=record.federal_withholding,
-            ss_ee=record.social_security_ee,
-            medicare_ee=record.medicare_ee,
-            addl_medicare_ee=record.additional_medicare_ee,
-            other_deductions=record.deductions,
-            net=record.net_pay,
-            ytd_gross=ytd_gross,
-            ytd_taxes_deductions=ytd_taxes_deductions,
-            ytd_net=ytd_net,
-            logo_path=logo_abs_path,
+        ytd_summary = {
+            "ytd_gross": round(sum(r.gross_pay for r in ytd), 2),
+            "ytd_net": round(sum(r.net_pay for r in ytd), 2),
+            "ytd_fit": round(sum(r.federal_withholding for r in ytd), 2),
+            "ytd_ss": round(sum(r.social_security_ee for r in ytd), 2),
+            "ytd_medicare": round(sum(r.medicare_ee for r in ytd), 2),
+            "ytd_addl_medicare": round(sum(r.additional_medicare_ee for r in ytd), 2),
+            "ytd_other_deductions": round(sum(r.deductions for r in ytd), 2),
+        }
+        ytd_summary["ytd_total_deductions"] = round(
+            ytd_summary["ytd_fit"]
+            + ytd_summary["ytd_ss"]
+            + ytd_summary["ytd_medicare"]
+            + ytd_summary["ytd_addl_medicare"]
+            + ytd_summary["ytd_other_deductions"],
+            2,
         )
-        return Response(content=pdf_bytes, media_type="application/pdf")
+
+        original_logo_path = company.logo_path
+        company.logo_path = str((static_root / original_logo_path).resolve()) if original_logo_path else None
+        pdf_bytes = generate_paystub_pdf(company, emp, record, ytd_summary)
+        company.logo_path = original_logo_path
+
+        filename = f"paystub_{emp.last_name.lower()}_{record.year}_{record.month:02d}.pdf"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.post("/w2/generate/{employee_id}")
     def generate_w2(request: Request, employee_id: int, year: int = Form(...), db: Session = Depends(db_dependency)):
