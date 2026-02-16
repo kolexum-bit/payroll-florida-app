@@ -97,8 +97,7 @@ def test_pay_stub_pdf_with_logo_still_contains_key_content(client):
     create_company(client, "A", "11")
     png_bytes = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc``\x00\x00\x00\x02\x00\x01\xe2!\xbc3\x00\x00\x00\x00IEND\xaeB`\x82"
     client.post(
-        "/company",
-        data={"company_id": 1, "name": "A", "fein": "11", "florida_account_number": "A-FL", "default_tax_year": 2025, "fl_suta_rate": "2.7%"},
+        "/company/1/logo",
         files={"logo": ("logo.png", io.BytesIO(png_bytes), "image/png")},
     )
     create_employee(client, 1, "111-22-3333", "Alice")

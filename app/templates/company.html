@@ -2,23 +2,34 @@
 {% block title %}Company | Payroll Florida{% endblock %}
 {% block content %}
 <h1>Company Setup</h1>
-<form method="post" action="/company" enctype="multipart/form-data">
+<form method="post" action="/company">
   <input type="hidden" name="company_id" value="{{ edit_company.id if edit_company else '' }}" />
   <div><label>Name</label><br /><input type="text" name="name" required value="{{ edit_company.name if edit_company else '' }}" /></div>
   <div><label>FEIN</label><br /><input type="text" name="fein" required value="{{ edit_company.fein if edit_company else '' }}" /></div>
   <div><label>Florida Account Number</label><br /><input type="text" name="florida_account_number" required value="{{ edit_company.florida_account_number if edit_company else '' }}" /></div>
   <div><label>Default Tax Year</label><br /><input type="number" name="default_tax_year" required value="{{ edit_company.default_tax_year if edit_company else '' }}" /></div>
   <div><label>FL SUTA Rate</label><br /><input type="text" name="fl_suta_rate" required value="{{ format_rate_percent(edit_company.fl_suta_rate) if edit_company else '' }}" placeholder="2.7% or 0.027" /></div>
-  <div><label>Company Logo (PNG/JPG, max 2MB)</label><br /><input type="file" name="logo" accept=".png,.jpg,.jpeg,image/png,image/jpeg" /></div>
-  {% if edit_company and edit_company.logo_path %}
-    <div>
-      <p>Current logo:</p>
-      <img src="/static/{{ edit_company.logo_path }}" alt="{{ edit_company.name }} logo" style="max-height: 80px; border: 1px solid #ddd; padding: 0.25rem;" />
-    </div>
-    <div><label><input type="checkbox" name="remove_logo" value="1" /> Remove logo</label></div>
-  {% endif %}
   <button type="submit">{{ "Update Company" if edit_company else "Create Company" }}</button>
 </form>
+
+{% if edit_company %}
+  <h2>Company Logo</h2>
+  <form method="post" action="/company/{{ edit_company.id }}/logo" enctype="multipart/form-data">
+    <div><label>Company Logo (PNG/JPG, max 2MB)</label><br /><input type="file" name="logo" accept=".png,.jpg,.jpeg,image/png,image/jpeg" required /></div>
+    <button type="submit">Upload Logo</button>
+  </form>
+
+  {% if edit_company.logo_path %}
+    <div>
+      <p>Current logo preview:</p>
+      <img src="/static/{{ edit_company.logo_path }}" alt="{{ edit_company.name }} logo" style="max-height: 80px; border: 1px solid #ddd; padding: 0.25rem;" />
+    </div>
+    <form method="post" action="/company/{{ edit_company.id }}/logo/delete" style="margin-top: 0.5rem;">
+      <button type="submit">Remove Logo</button>
+    </form>
+  {% endif %}
+{% endif %}
+
 <h2>Saved Companies</h2>
 <table><thead><tr><th>ID</th><th>Name</th><th>FEIN</th><th>Florida Account</th><th>Tax Year</th><th>SUTA Rate</th><th>Logo</th><th>Actions</th></tr></thead><tbody>
 {% for company in companies %}

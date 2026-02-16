@@ -168,8 +168,15 @@ def create_monthly_pay_stub_pdf_bytes(*, company_name: str, employee_name: str, 
     image = _load_image(logo_path)
     commands: list[str] = ["0 0 0 rg"]
     if image:
-        # top-right logo
-        commands.append(f"q 120 0 0 60 444 724 cm /Im1 Do Q")
+        # top-right logo, fit in a 1.2in x 0.75in box while preserving aspect ratio
+        max_w = 86.4
+        max_h = 54.0
+        scale = min(max_w / image["width"], max_h / image["height"])
+        draw_w = round(image["width"] * scale, 2)
+        draw_h = round(image["height"] * scale, 2)
+        x = round(540 - draw_w, 2)
+        y = round(760 - draw_h, 2)
+        commands.append(f"q {draw_w} 0 0 {draw_h} {x} {y} cm /Im1 Do Q")
 
     commands.extend([
         "BT",

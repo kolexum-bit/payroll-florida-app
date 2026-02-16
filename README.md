@@ -26,6 +26,7 @@ The schema is recreated automatically at startup.
 ## UX and calculation behavior
 - FL SUTA rate accepts `%` or decimal input (`2.7`, `2.7%`, `0.027`) and is stored canonically as a decimal value.
 - Company Setup supports optional PNG/JPG logo upload (max 2MB), preview, replace, and remove.
+- Logo files are stored locally under `app/static/company_logos/{company_id}/logo.{ext}` and `companies.logo_path` stores the relative path.
 - Pay stub PDFs include sectioned layout (Earnings, Taxes & Deductions, Net Pay, YTD Summary) and YTD cumulative totals.
 - YTD totals are computed per employee, company, and tax year for all records up to the selected pay period month.
 

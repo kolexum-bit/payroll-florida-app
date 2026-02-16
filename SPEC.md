@@ -26,6 +26,10 @@ This implementation supports strict multi-company payroll with per-company data 
 - Payroll save is blocked when metadata, required FIT files, or Pub 15-T invariants do not validate for the selected year/frequency.
 - Troubleshooting endpoint: `/health/tax/{year}` returns structured validation results.
 
+## Pay stub rendering
+- Pay stub header renders the company logo at top-right when `companies.logo_path` is present and the file can be loaded from local disk.
+- Missing/unreadable logo files are ignored silently (PDF generation does not fail).
+
 ## W-2 mapping
 Generated from stored payroll ledger totals:
 - Box 1 = sum(gross_pay)

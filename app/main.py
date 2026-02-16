@@ -4,7 +4,6 @@ import csv
 import io
 import logging
 import os
-import shutil
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote_plus
@@ -39,8 +38,8 @@ def create_app(database_url: str | None = None) -> FastAPI:
     app = FastAPI(title="Payroll Florida App")
     templates = Jinja2Templates(directory="app/templates")
     static_root = Path("app/static")
-    upload_root = static_root / "uploads"
-    upload_root.mkdir(parents=True, exist_ok=True)
+    logo_root = static_root / "company_logos"
+    logo_root.mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=static_root), name="static")
     session_factory = create_session_factory(database_url or os.getenv("DATABASE_URL", "sqlite:///./payroll.db"))
     app.state.session_factory = session_factory
@@ -88,6 +87,47 @@ def create_app(database_url: str | None = None) -> FastAPI:
     def company_page(request: Request, edit_id: int | None = None, message: str | None = None, status: str = "success", db: Session = Depends(db_dependency)):
         return templates.TemplateResponse("company.html", base_ctx(request, db, message=message, status=status, edit_company=db.get(Company, edit_id) if edit_id else None))
 
+    def _delete_company_logo_files(company_id: int):
+        company_logo_dir = (logo_root / str(company_id)).resolve()
+        expected_root = logo_root.resolve()
+        if expected_root not in company_logo_dir.parents:
+            return
+        if company_logo_dir.exists():
+            for existing in company_logo_dir.glob("logo.*"):
+                existing.unlink(missing_ok=True)
+
+    def _store_company_logo(company: Company, logo: UploadFile) -> tuple[str, str]:
+        content_type = (logo.content_type or "").lower()
+        ext = Path(logo.filename or "").suffix.lower()
+        allowed_exts = {".png", ".jpg", ".jpeg"}
+        allowed_mime = {"image/png", "image/jpeg", "image/jpg"}
+        if ext not in allowed_exts or content_type not in allowed_mime:
+            raise ValueError("Logo must be PNG or JPG")
+
+        logo_bytes = logo.file.read()
+        if len(logo_bytes) > 2 * 1024 * 1024:
+            raise ValueError("Logo must be 2MB or smaller")
+
+        normalized_ext = ".jpg" if ext in {".jpg", ".jpeg"} else ".png"
+        company_logo_dir = (logo_root / str(company.id)).resolve()
+        expected_root = logo_root.resolve()
+        if expected_root not in company_logo_dir.parents:
+            raise ValueError("Invalid logo upload path")
+
+        company_logo_dir.mkdir(parents=True, exist_ok=True)
+        for existing in company_logo_dir.glob("logo.*"):
+            existing.unlink(missing_ok=True)
+
+        filename = f"logo{normalized_ext}"
+        target = (company_logo_dir / filename).resolve()
+        if company_logo_dir != target.parent:
+            raise ValueError("Invalid logo upload path")
+        target.write_bytes(logo_bytes)
+
+        rel_path = Path("company_logos") / str(company.id) / filename
+        normalized_mime = "image/jpeg" if normalized_ext == ".jpg" else "image/png"
+        return str(rel_path), normalized_mime
+
     @app.post("/company")
     def upsert_company(
         company_id: int | None = Form(default=None),
@@ -96,8 +136,6 @@ def create_app(database_url: str | None = None) -> FastAPI:
         florida_account_number: str = Form(...),
         default_tax_year: int = Form(...),
         fl_suta_rate: str = Form(...),
-        logo: UploadFile | None = File(default=None),
-        remove_logo: str | None = Form(default=None),
         db: Session = Depends(db_dependency),
     ):
         company = db.get(Company, company_id) if company_id else Company()
@@ -110,48 +148,44 @@ def create_app(database_url: str | None = None) -> FastAPI:
         except ValueError as exc:
             return RedirectResponse(url=f"/company?message={quote_plus(str(exc))}&status=error", status_code=302)
 
-        if remove_logo:
-            if company.logo_path:
-                (static_root / company.logo_path).unlink(missing_ok=True)
-            company.logo_path = None
-
-        if logo and logo.filename:
-            content_type = (logo.content_type or "").lower()
-            ext = Path(logo.filename).suffix.lower()
-            allowed = {".png", ".jpg", ".jpeg"}
-            allowed_types = {"image/png", "image/jpeg", "image/jpg"}
-            if ext not in allowed or content_type not in allowed_types:
-                return RedirectResponse(url="/company?message=Logo+must+be+PNG+or+JPG&status=error", status_code=302)
-
-            logo.file.seek(0, os.SEEK_END)
-            size = logo.file.tell()
-            logo.file.seek(0)
-            if size > 2 * 1024 * 1024:
-                return RedirectResponse(url="/company?message=Logo+must+be+2MB+or+smaller&status=error", status_code=302)
-
-            if not company_id:
-                db.add(company)
-                db.flush()
-
-            company_upload_dir = upload_root / str(company.id)
-            company_upload_dir.mkdir(parents=True, exist_ok=True)
-            target = company_upload_dir / f"logo{ext}"
-            for existing in company_upload_dir.glob("logo.*"):
-                existing.unlink(missing_ok=True)
-            with target.open("wb") as output:
-                shutil.copyfileobj(logo.file, output)
-            company.logo_path = str(Path("uploads") / str(company.id) / target.name)
-
         if not company_id:
             db.add(company)
         db.commit()
         return RedirectResponse(url=f"/company?message={'Company+updated' if company_id else 'Company+created'}&status=success", status_code=302)
+
+    @app.post("/company/{company_id}/logo")
+    def upload_company_logo(company_id: int, logo: UploadFile = File(...), db: Session = Depends(db_dependency)):
+        company = db.get(Company, company_id)
+        if not company:
+            return RedirectResponse(url="/company?message=Company+not+found&status=error", status_code=302)
+        try:
+            logo_path, logo_mime = _store_company_logo(company, logo)
+        except ValueError as exc:
+            return RedirectResponse(url=f"/company?edit_id={company_id}&message={quote_plus(str(exc))}&status=error", status_code=302)
+
+        company.logo_path = logo_path
+        company.logo_mime = logo_mime
+        db.commit()
+        return RedirectResponse(url=f"/company?edit_id={company_id}&message=Logo+uploaded&status=success", status_code=302)
+
+    @app.post("/company/{company_id}/logo/delete")
+    def delete_company_logo(company_id: int, db: Session = Depends(db_dependency)):
+        company = db.get(Company, company_id)
+        if not company:
+            return RedirectResponse(url="/company?message=Company+not+found&status=error", status_code=302)
+
+        _delete_company_logo_files(company_id)
+        company.logo_path = None
+        company.logo_mime = None
+        db.commit()
+        return RedirectResponse(url=f"/company?edit_id={company_id}&message=Logo+removed&status=success", status_code=302)
 
     @app.post("/company/{company_id}/delete")
     def delete_company(company_id: int, db: Session = Depends(db_dependency)):
         company = db.get(Company, company_id)
         if not company:
             return RedirectResponse(url="/company?message=Company+not+found&status=error", status_code=302)
+        _delete_company_logo_files(company_id)
         db.delete(company)
         db.commit()
         return RedirectResponse(url="/company?message=Company+deleted+with+cascade&status=success", status_code=302)
@@ -361,7 +395,11 @@ def create_app(database_url: str | None = None) -> FastAPI:
         ytd_gross = round(sum(r.gross_pay for r in ytd), 2)
         ytd_taxes_deductions = round(sum(r.federal_withholding + r.social_security_ee + r.medicare_ee + r.additional_medicare_ee + r.deductions for r in ytd), 2)
         ytd_net = round(sum(r.net_pay for r in ytd), 2)
-        logo_abs_path = str((static_root / company.logo_path).resolve()) if company.logo_path else None
+        logo_abs_path = None
+        if company.logo_path:
+            resolved_logo = (static_root / company.logo_path).resolve()
+            if logo_root.resolve() in resolved_logo.parents and resolved_logo.exists():
+                logo_abs_path = str(resolved_logo)
 
         pdf_bytes = create_monthly_pay_stub_pdf_bytes(
             company_name=company.name,
